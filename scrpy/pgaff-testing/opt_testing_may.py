@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-import scipy as sp
 import pyreadr
 import sys
 sys.path.append(os.path.abspath('../src/'))
@@ -42,6 +41,7 @@ def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
     p_empty_cap_hist = compute_cond_lik_ind(len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist)
     p_nonempty = 1 - p_empty_cap_hist
     expected_n = np.sum(p_nonempty*density)
+    print(f"Expected N: {expected_n}")
     return expected_n
 
 def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
@@ -65,8 +65,6 @@ def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
     nscenarios = len(g0)
     e_n = np.zeros((nscenarios,1))
     for s in range(nscenarios):
-        # prob_cap = get_prob_cap_filename(s)
-        # print("Got prob_cap")
         e_n[s,0] = compute_expected_n(ac_locs, trap_locs, g0[s], sigma[s], K, density[s], distances, trap_x)
     return(e_n)
 
@@ -95,22 +93,15 @@ def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
     # Compute the expected number of captures
     broadcast_density = np.broadcast_to(density_array, (len(trap_locs), len(density_array)))    # Repeats density to shape of (num_traps, num_activity_centers)
     expected_c = np.sum(prob_cap*broadcast_density)*K
+    print(f"Expected C: {expected_c}")
     return expected_c
 
 def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
     nscenarios = len(g0)
     e_c = np.zeros((nscenarios,1))
     for s in range(nscenarios):
-        # prob_cap = get_prob_cap_filename(s)
-        # print("Got prob_cap")
         e_c[s,0] = compute_expected_c(ac_locs, trap_locs, g0[s], sigma[s], K, density[s], distances, trap_x)
     return(e_c)
-
-# def get_prob_cap_filename(s):
-#     start = (s // 10) * 10 + 1
-#     end = start + 9
-#     filename = f'500m_data/prob_cap/prob_cap_{start}_to_{end}.txt.npy'
-#     return np.load(filename, mmap_mode='r').copy()     # Read-only memory mapping to avoid loading the entire file into memory
 
 def backward_greedy(scenarios, trap_loc, centers, K, distances):
     # Initailize all potential trap locations to have a camera.
@@ -121,12 +112,6 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
     g0 = []
     sigma = []
     density_prior = []
-    # alpha1 = []
-
-    # Initialize temporary storage of capture probabilities
-    # prob_cap_temp = []
-    # prior_s = 1
-    # batch_counter = 0
 
     # Intiailize storage of loss functions
     E_n_curr = []
@@ -137,52 +122,24 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
 
     # For each scenario, calculate the RSE in the event all potential trap locations are activated.
     for s in range(len(scenarios)):
-        # s_counter = s+1
-        # print(s)
         D.append(scenarios[s][0])
         g0.append(scenarios[s][1])
         sigma.append(scenarios[s][2])
-        # density_prior.append(np.ones((centers.shape[0]))*(47/float(centers.shape[0])))      # List of Length # of potential activity centers
-        # Read in density prior file from /data/density if not using uniform density
-        density_prior_file =  f'500m_data/density/Dmod_draw_{s+1}.csv'
-        density_df = pd.read_csv(density_prior_file)
-        density_prior.append(density_df['cell_density'].values.tolist())  # List of Length # of potential activity centers
 
-        # alpha1.append(1/(2*sigma[s]*sigma[s]))
-        
-        # Write large prob_cap arrays to disk
-        # prob_cap_temp.append((g0[s])*np.exp(-alpha1[s]*(distances**2)))      # Array of size (# traps, # poential activity centers)
-        
+        # Read in density prior file from /data/density if not using uniform density
+        density_prior_file =  f'500m_data/density/Dmod_draw_{scenarios[s][3]}.csv'
+        density_df = pd.read_csv(density_prior_file)
+        density_df['cell_density'] = density_df['cell_density'] * 25            # Multiply cell density value by cell area in hectares (25)
+        density_prior.append(density_df['cell_density'].values.tolist())        # List of Length # of potential activity centers
+
         # Compute RSE for the current scenario when all trap locations are activated
         E_n_curr.append(compute_expected_n(centers, trap_loc, g0[s], sigma[s], K, density_prior[s], distances, trap_x))
-        # E_n_curr = compute_expected_n(centers, trap_loc, g0[s], sigma[s], K, density_prior[s], prob_cap_temp[s%10], trap_x)
-        # with open('500m_data/e_n.txt', 'a') as f:
-        #     f.write(f'{E_n_curr}\n')
         E_c_curr.append(compute_expected_c(centers, trap_loc, g0[s], sigma[s], K, density_prior[s], distances, trap_x))
-        # E_c_curr = compute_expected_c(centers, trap_loc, g0[s], sigma[s], K, density_prior[s], prob_cap_temp[s%10], trap_x)
-        # with open('500m_data/e_c.txt', 'a') as f:
-        #     f.write(f'{E_c_curr}\n')
         E_r_curr.append(E_c_curr[s] - E_n_curr[s])
-        # E_r_curr = E_c_curr - E_n_curr
-        # with open('500m_data/e_r.txt', 'a') as f:
-        #     f.write(f'{E_r_curr}\n')
         RSE_curr.append(1/np.sqrt(min([E_n_curr[s], E_r_curr[s]])))
-        # RSE_curr = 1/np.sqrt(min([E_n_curr, E_r_curr]))
-        # with open('500m_data/rse.txt', 'a') as f:
-        #     f.write(f'{RSE_curr}\n')
-
-        # if s_counter% 10 == 0:
-        #     np.save(f'500m_data/prob_cap/prob_cap_{prior_s}_to_{s_counter}.txt', prob_cap_temp)
-        #     prior_s = s_counter+1
-        #     prob_cap_temp = []
-        #     batch_counter = 0
-
+       
     # Average performance across all scenarios when all trap locations are activated
-    # print("Computing Avg RSE Across Scenarios")
     RSE_hist.append(np.mean(RSE_curr))
-    # RSE_hist = np.mean(RSE_curr)
-    # with open('500m_data/rse_hist.txt', 'a') as f:
-    #     f.write(f'{RSE_hist}\n')
     remove_hist = []
     activated_trap_hist = []
     rse_tracker = {}
@@ -204,7 +161,6 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
             trap_x_temp[pos, trap_idx] = 0 
 
         # Multiprocess the E_n and E_c calculations
-        # print(f"Multiprocessing E_n and E_c for {len(trap_indices)} traps")
         func1 = partial(compute_expected_n_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)   # Setup all parameters but the activated trap locations
         func2 = partial(compute_expected_c_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)
         pool = mp.Pool(min(mp.cpu_count(), 6))
@@ -213,10 +169,11 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
         pool.close()
         pool.join()
 
+        # Calculate E_r
+        E_r_per_scenario = E_c_per_scenario                     # E_r = E_c_per_scenario - E_n_per_scenario            
+        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape) 
+
         # Calculate RSE
-        # print(f"Calculating RSE for {len(trap_indices)} traps")
-        E_r_per_scenario = E_c_per_scenario
-        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape)
         RSE_per_scenario = np.zeros(E_r_per_scenario.shape)
         for t in range(len(trap_indices)):
             for s in range(len(scenarios)):
@@ -262,18 +219,23 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
     
     return(remove_hist, RSE_hist, activated_trap_hist)
 
+# Read in True N file
+true_n = pd.read_csv('./500m_data/True_N_per_draw.csv')
+true_n_filtered = true_n[true_n['N'].between(30, 80)]                    # Only consider scenarios with True N between 30 and 80
+true_n_filtered = true_n_filtered['Parameter_draw'].values.tolist()      # Get the parameter draw IDS
+
 # Read in parameter draws
 params = pd.read_csv('./500m_data/param_values_for_each_draw300.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-
-# FOR TESTING - Only use those with an index between 1 and 100
-params = params[params['index'].between(1, 100)]
+params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
+params = params.iloc[:2, :]                                              # Only keep the first two draws for testing
 
 # Extract parameter values
 D = params['D'].values
 g0 = params['g0'].values
 sigma = params['sigma'].values
-K= 5    # Number of sampling periods
+K= 5                                        # Number of sampling periods
+draw = params['index'].values.tolist()      # Get the IDs of the parameter draws we are evaluating over
 
 # Read in potential activity center locations
 ac_coords = pyreadr.read_r('./500m_data/500m_mask.RDS')
@@ -295,7 +257,7 @@ trap_coords_list = np.array(trap_coords_list)
 # np.random.shuffle(ac_coords_list)
 # ac_coords_list = (ac_coords_list)[:100]
 np.random.shuffle(trap_coords_list)
-trap_coords_list = (trap_coords_list)[:200]
+trap_coords_list = (trap_coords_list)[:500]
 np.save('./500m_data/trap_coords_list.npy', trap_coords_list)
 
 # Calculate euclidean distances from traps to activity centers
@@ -304,6 +266,6 @@ centers = ac_coords_list[np.newaxis, :, :]  # Add a new axis to centers to make 
 differences = traps - centers
 distances = np.linalg.norm(differences, axis=2)
 
-scenarios = list(zip(*[D, g0, sigma]))
+scenarios = list(zip(*[D, g0, sigma, draw]))
 
 backward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances)
