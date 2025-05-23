@@ -22,15 +22,15 @@ plot(HF)
 # Run the below in command lind
 # ogrinfo --config SHAPE_RESTORE_SHX YES /home1/hannahmu/SensorOpt/secr/spatial_data/study_area_2021_GCS.shp
 SA<-st_read("SensorOpt/secr/spatial_data/study_area_2021_GCS.shp")
-SA <- st_set_crs(SA, 4326)
-SA <- st_transform(SA, crs = st_crs(TC))
-plot(SA, add = TRUE, col = "red")
+SA <- st_set_crs(SA, 4326)      ## Arielle will send me what this should be
+study_area <- st_transform(SA, crs = st_crs(TC))
+plot(study_area, add = TRUE, col = "red")
 
 ################ Make a traps object by subsetting the 500m grid ################
 traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
 raps_500m<-traps_500m[-c(1)]
 
-exclude_traps <- read.table("SensorOpt/secr/500trap-2scenario/non-matching-ids.txt")  # Assumes one ID per line
+exclude_traps <- read.table("SensorOpt/secr/500trap-2scenario/non_matching_ids.txt")  # Assumes one ID per line
 
 optim_cams <- traps_500m %>% 
   filter(!Trap_index %in% exclude_traps$V1)  # V1 is default column name from read.table
@@ -77,7 +77,7 @@ covariates(mask1) <- data.frame(TC = scale(TC_extract[,2])[,1],
 summary(covariates(mask1))
 
 ############################# load up a ch #####################################
-draw<-1
+draw<-120
 
 ch<-read.csv(paste("ch_draw_",draw,".csv", sep=""))
 

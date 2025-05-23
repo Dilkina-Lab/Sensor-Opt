@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -8,7 +7,6 @@ sys.path.append(os.path.abspath('../src/'))
 import argparse
 from functools import partial
 import math
-import matplotlib.pyplot as plt
 import multiprocessing as mp
 from scipy import stats
 import sys
@@ -41,7 +39,7 @@ def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
     p_empty_cap_hist = compute_cond_lik_ind(len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist)
     p_nonempty = 1 - p_empty_cap_hist
     expected_n = np.sum(p_nonempty*density)
-    print(f"Expected N: {expected_n}")
+    # print(f"Expected N: {expected_n}")
     return expected_n
 
 def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
@@ -93,7 +91,7 @@ def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
     # Compute the expected number of captures
     broadcast_density = np.broadcast_to(density_array, (len(trap_locs), len(density_array)))    # Repeats density to shape of (num_traps, num_activity_centers)
     expected_c = np.sum(prob_cap*broadcast_density)*K
-    print(f"Expected C: {expected_c}")
+    # print(f"Expected C: {expected_c}")
     return expected_c
 
 def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
@@ -246,19 +244,20 @@ ac_coords_list = np.array(ac_coords_list)
 # Read in potential trap locations
 trap_coords = pd.read_csv('./500m_data/500m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-trap_coords = trap_coords.rename(columns = {'X': 'x', 'Y': 'y'})
+exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_2km_boundary.csv')               # Trap locations either not accessible by Robin or > 2km away from prior deployment
+trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]   # Remove trap locations that are not accessible
 trap_coords_list = []
 for i in range(trap_coords.shape[0]):
-    trap_coords_list.append((trap_coords['x'][i], trap_coords['y'][i]))
+    trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
 trap_coords_list = np.array(trap_coords_list)
 
 # Randomly select 1000 trap locations and activity centers -- Comment out when not testing
 # np.random.seed(42)
 # np.random.shuffle(ac_coords_list)
 # ac_coords_list = (ac_coords_list)[:100]
-np.random.shuffle(trap_coords_list)
-trap_coords_list = (trap_coords_list)[:500]
-np.save('./500m_data/trap_coords_list.npy', trap_coords_list)
+# np.random.shuffle(trap_coords_list)
+# trap_coords_list = (trap_coords_list)[:500]
+# np.save('./500m_data/trap_coords_list.npy', trap_coords_list)
 
 # Calculate euclidean distances from traps to activity centers
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
