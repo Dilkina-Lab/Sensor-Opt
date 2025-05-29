@@ -28,9 +28,9 @@ plot(study_area, add = TRUE, col = "red")
 
 ################ Make a traps object by subsetting the 500m grid ################
 traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
-raps_500m<-traps_500m[-c(1)]
+traps_500m<-traps_500m[-c(1)]
 
-exclude_traps <- read.table("SensorOpt/secr/500trap-2scenario/non_matching_ids.txt")  # Assumes one ID per line
+exclude_traps <- read.table("SensorOpt/secr/200trap-2scenario/LG-excluded_traps.txt")  # Assumes one ID per line
 
 optim_cams <- traps_500m %>% 
   filter(!Trap_index %in% exclude_traps$V1)  # V1 is default column name from read.table
@@ -111,7 +111,10 @@ write.table(dets2, file="dets2.txt", sep = "\t", row.names=FALSE)
 # Traps
 #############
 
-traps_df <- read_table("traps.txt")
+traps_df<-traps12%>%mutate(trapID=Trap_index)%>%select(trapID,x,y)
+
+#This writes a temporary file which gets overwritten each time we produe a new trap input file
+write.table(traps_df, file="traps.txt", sep = "\t", row.names=FALSE)
 
 #Make ch input for the secr package
 ch<-read.capthist(captfile = "dets2.txt", 
@@ -129,7 +132,7 @@ system.time(fit_model <- secr.fit(capthist = ch, #The input above in secr packag
                                              g0=0.5, 
                                              sigma=3000)))
 
-saveRDS(fit_model, file="model2.RDS")
+saveRDS(fit_model, file="model_120.RDS")
 
 #Get true Ns for comparison
 gcs_get_object("sim_update_4-25-2025/True_N_per_draw.csv", 

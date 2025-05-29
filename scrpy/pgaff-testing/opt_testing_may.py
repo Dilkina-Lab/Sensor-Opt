@@ -244,8 +244,8 @@ ac_coords_list = np.array(ac_coords_list)
 # Read in potential trap locations
 trap_coords = pd.read_csv('./500m_data/500m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_2km_boundary.csv')               # Trap locations either not accessible by Robin or > 2km away from prior deployment
-trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]   # Remove trap locations that are not accessible
+exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_PLUS_2km_boundary.csv')               
+trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]        # Remove trap locations that are not accessible or > 2km away from prior deployment
 trap_coords_list = []
 for i in range(trap_coords.shape[0]):
     trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
@@ -255,9 +255,11 @@ trap_coords_list = np.array(trap_coords_list)
 # np.random.seed(42)
 # np.random.shuffle(ac_coords_list)
 # ac_coords_list = (ac_coords_list)[:100]
-# np.random.shuffle(trap_coords_list)
-# trap_coords_list = (trap_coords_list)[:500]
-# np.save('./500m_data/trap_coords_list.npy', trap_coords_list)
+np.random.shuffle(trap_coords_list)
+trap_coords_list = (trap_coords_list)[:200]
+np.save('./500m_data/trap_coords_list.npy', trap_coords_list)
+trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
+trap_coords_list_df.to_csv('test_locs.csv', index=False)
 
 # Calculate euclidean distances from traps to activity centers
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
