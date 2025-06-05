@@ -30,7 +30,7 @@ plot(study_area, add = TRUE, col = "red")
 traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
 traps_500m<-traps_500m[-c(1)]
 
-exclude_traps <- read.table("SensorOpt/secr/200trap-2scenario/LG-excluded_traps.txt")  # Assumes one ID per line
+exclude_traps <- read.table("SensorOpt/secr/200trap-2scenario/non_matching_ids.txt")  # Assumes one ID per line
 
 optim_cams <- traps_500m %>% 
   filter(!Trap_index %in% exclude_traps$V1)  # V1 is default column name from read.table
@@ -77,9 +77,9 @@ covariates(mask1) <- data.frame(TC = scale(TC_extract[,2])[,1],
 summary(covariates(mask1))
 
 ############################# load up a ch #####################################
-draw<-120
+draw<-194
 
-ch<-read.csv(paste("ch_draw_",draw,".csv", sep=""))
+ch<-read.csv(paste("ch/ch_draw_",draw,".csv", sep=""))
 
 #Constrain to only traps in traps1. Not that not all traps will appear if some 
 #did not detect any animals

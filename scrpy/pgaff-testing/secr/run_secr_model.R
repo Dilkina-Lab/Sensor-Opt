@@ -37,7 +37,7 @@ rm(new.packages)
 
 #This file gives access to pgaff GCS bucket, makes sure it is in your working
 #directory and please do not publish it anywhere
-gcs_auth(json_file = "pgaff-camera-optim.json", token = NULL, email = NULL)
+gcs_auth(json_file = "SensorOpt/secr/pgaff-camera-optim.json", token = NULL, email = NULL)
 
 ######################### Load in spatial layers ###############################
 #Made in "prep_secr_covs.R" script
@@ -83,7 +83,7 @@ traps_500m<-traps_500m[-c(1)]
 
 # New code for exclusion-based selection:
 # Load trap IDs to exclude
-exclude_traps <- read.table("non-matching-ids.txt")  # Assumes one ID per line
+exclude_traps <- read.table("non_matching_ids.txt")  # Assumes one ID per line
 
 # Filter traps excluding these IDs
 optim_cams <- traps_500m %>% 
@@ -137,7 +137,7 @@ summary(covariates(mask1))
 ############################# load up a ch #####################################
 #You will need to define the ch for the parameter draw here
 #Or we can make a loop to go through all draws
-draw<-1
+draw<-194
 
 gcs_get_object(paste("sim_update_4-25-2025/ch/ch_draw_",draw,".csv", sep=""), 
                bucket = "pgaff_simulations", 
