@@ -34,7 +34,7 @@ plot(study_area, add = TRUE, col = "red")
 traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
 traps_500m<-traps_500m[-c(1)]
 
-exclude_traps <- read.table("SensorOpt/secr/BG2/excluded_traps.txt")  # Assumes one ID per line
+exclude_traps <- read.table("SensorOpt/secr/FG1/FG-excluded_traps.txt")  # Assumes one ID per line
 
 optim_cams <- traps_500m %>% 
   filter(!Trap_index %in% exclude_traps$V1)  # V1 is default column name from read.table
@@ -112,13 +112,13 @@ points(traps1, pch=16, col="blue")
 # traps1<-read.traps(data=traps12, detector="proximity")
 
 ########################## Make a mask #########################################
-gcs_get_object("sim_update_4-25-2025/param_values_for_each_draw300_4-28-25.csv", 
+gcs_get_object("sim_update_6-9-2025/param_values_for_each_draw150_6-9-25.csv", 
                bucket = "pgaff_simulations", 
-               saveToDisk = "param_values_for_each_draw300_4-28-25.csv", 
+               saveToDisk = "param_values_for_each_draw150_6-9-25.csv", 
                overwrite=TRUE)
 
-param_vals<-read.csv("param_values_for_each_draw300_4-28-25.csv")
-param_vals<-param_vals[-c(1)]
+param_vals <- read.csv("param_values_for_each_draw150_6-9-25.csv")
+param_vals <- param_vals[-c(1)]
 
 #Buffer the SA by 2*sigma
 max_sigma<-signif(max(param_vals$sigma),1) #meters
@@ -153,15 +153,15 @@ summary(covariates(mask1))
 #Arielle has added a loop here to go through all the parameter draws
 
 #Get true Ns for comparison later
-gcs_get_object("sim_update_4-25-2025/True_N_per_draw.csv", 
+gcs_get_object("sim_update_6-9-2025/True_N_per_draw.csv", 
                bucket = "pgaff_simulations", 
                saveToDisk = "True_N_per_draw.csv", 
                overwrite=TRUE)
-true_N<-read.csv("True_N_per_draw.csv")
+true_N <- read.csv("True_N_per_draw.csv")
 
 # Define the range of draws you want to loop over
-start_draw <- 21
-end_draw <- 30
+start_draw <- 1
+end_draw <- 50
 
 # Your loop will look like this:
 results <- matrix(nrow=0, ncol=16)
@@ -231,7 +231,7 @@ for (i in start_draw:end_draw) {
                                                g0=0.5, 
                                                sigma=3000)))
   
-  saveRDS(fit_model, file=paste("model_U1.RDS"))
+  saveRDS(fit_model, file=paste("model_FG1.RDS"))
   
   #If we need CIs for Nelder-Mead method - take a while though
   #We only get CIs for the beta parameters, so to get the real parameters we need to 
@@ -261,7 +261,7 @@ for (i in start_draw:end_draw) {
 
 }
 
-file_name <- paste0("U1_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("BG3_pt2_100_g0_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
 
 
@@ -362,12 +362,12 @@ if (nrow(traps12) == 0) stop("No matching traps found in traps12 after alternati
 traps1 <- read.traps(data = traps12, detector = "proximity")
 
 ########################## Make a mask #########################################
-gcs_get_object("sim_update_4-25-2025/param_values_for_each_draw300_4-28-25.csv", 
+gcs_get_object("sim_update_6-9-2025/param_values_for_each_draw150_6-9-25.csv", 
                bucket = "pgaff_simulations", 
-               saveToDisk = "param_values_for_each_draw300_4-28-25.csv", 
+               saveToDisk = "param_values_for_each_draw150_6-9-25.csv", 
                overwrite=TRUE)
 
-param_vals <- read.csv("param_values_for_each_draw300_4-28-25.csv")
+param_vals <- read.csv("param_values_for_each_draw150_6-9-25.csv")
 param_vals <- param_vals[-c(1)]
 
 # Buffer the SA by 2*sigma
@@ -400,15 +400,15 @@ covariates(mask1) <- data.frame(TC = scale(TC_extract[,2])[,1],
 summary(covariates(mask1))
 
 ############################# load up a ch #####################################
-gcs_get_object("sim_update_4-25-2025/True_N_per_draw.csv", 
+gcs_get_object("sim_update_6-9-2025/True_N_per_draw.csv", 
                bucket = "pgaff_simulations", 
                saveToDisk = "True_N_per_draw.csv", 
                overwrite=TRUE)
 true_N <- read.csv("True_N_per_draw.csv")
 
 # Define the range of draws you want to loop over
-start_draw <- 51
-end_draw <- 100
+start_draw <- 34
+end_draw <- 67
 
 results <- matrix(nrow=0, ncol=16)
 for (i in start_draw:end_draw) {
@@ -474,5 +474,6 @@ for (i in start_draw:end_draw) {
   results <- rbind(results, cbind(out))
 }
 
-file_name <- paste0("U1_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("U3_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
+
