@@ -307,7 +307,7 @@ traps_500m <- traps_500m[-c(1)]
 
 ##################### Alternate trap generation ################################
 # Set camera budget and grid spacing
-n_cams <- 60
+n_cams <- 20
 side <- ceiling(sqrt(st_area(SA_proj)))
 grid_cols <- ceiling(sqrt(n_cams))
 new_spacing <- as.numeric(floor(side / grid_cols))
@@ -474,6 +474,6 @@ for (i in start_draw:end_draw) {
   results <- rbind(results, cbind(out))
 }
 
-file_name <- paste0("U3_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("U4_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
 
