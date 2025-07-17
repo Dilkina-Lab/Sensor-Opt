@@ -11,6 +11,8 @@ import multiprocessing as mp
 from scipy import stats
 import sys
 from tqdm import tqdm
+from datetime import datetime
+import time
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -140,10 +142,11 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
         RSE_curr.append(1/np.sqrt(min([E_n_curr[s], E_r_curr[s]])))
        
     # Average performance across all scenarios when all trap locations are activated
-    RSE_hist.append(np.mean(RSE_curr))
+    RSE_hist.append(np.mean(RSE_curr))    
     remove_hist = []
     activated_trap_hist = []
     rse_tracker = {}
+    n_tracker = {}
 
     # Begin backward greedy approach - removing 1 camera at a time
     counter = 0
@@ -164,7 +167,7 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
         # Multiprocess the E_n and E_c calculations
         func1 = partial(compute_expected_n_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)   # Setup all parameters but the activated trap locations
         func2 = partial(compute_expected_c_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)
-        pool = mp.Pool(min(mp.cpu_count(), 6))
+        pool = mp.Pool(min(mp.cpu_count(), 10))
         E_n_per_scenario = np.squeeze(np.array(pool.map(func1, trap_x_temp)))
         E_c_per_scenario = np.squeeze(np.array(pool.map(func2, trap_x_temp)))
         pool.close()
@@ -192,6 +195,13 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
             for i, cam_id in enumerate(trap_indices)
         }
 
+        # add E_n per scenario to the n tracker
+        n_tracker[counter] = {
+            cam_id: E_n_per_scenario[i, s] 
+            for i, cam_id in enumerate(trap_indices)
+            for s in range(len(scenarios))
+        }
+
         # Select which trap to remove based on RSE
         min_change_idx = RSE_temp.index(min(RSE_temp)) 
         remove = trap_indices[min_change_idx]
@@ -207,17 +217,20 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances):
     print(f"Final remaining traps: {remaining_traps}")
 
     # Write results to files
-    with open('secr/Backward Greedy/BG4/activated_trap_hist.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG10/activated_trap_hist.txt', 'w') as f:
         for item in activated_trap_hist:
             f.write("%s\n" % item)
-    with open('secr/Backward Greedy/BG4/remove_hist.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG10/remove_hist.txt', 'w') as f:
         for item in remove_hist:
             f.write("%s\n" % item)
-    with open('secr/Backward Greedy/BG4/rse_hist.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG10/rse_hist.txt', 'w') as f:
         for item in RSE_hist:
             f.write("%s\n" % item)
-    with open('secr/Backward Greedy/BG4/rse_tracker.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG10/rse_tracker.txt', 'w') as f:
         for key, value in rse_tracker.items():
+            f.write(f"Iteration {key}: {value}\n")
+    with open('secr/Backward Greedy/BG10/n_tracker.txt', 'w') as f:
+        for key, value in n_tracker.items():
             f.write(f"Iteration {key}: {value}\n")
 
     pbar.close()
@@ -235,7 +248,7 @@ true_n_filtered = true_n_filtered['Parameter_draw'].values.tolist()      # Get t
 params = pd.read_csv('./500m_data/6-9 data/param_values_for_each_draw.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
 params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
-params = params.iloc[:5, :]                                              # Only keep the first two draws for testing
+params = params.iloc[:25, :]                                             # Only keep the first ten draws for testing
 
 # Extract parameter values
 D = params['D'].values
@@ -254,21 +267,24 @@ ac_coords_list = np.array(ac_coords_list)
 # Read in potential trap locations
 trap_coords = pd.read_csv('./500m_data/500m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_PLUS_2km_boundary.csv')               
-exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_UTM10N_updated.csv')               
-trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]        # Remove trap locations that are not accessible or > 2km away from prior deployment
+# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_PLUS_2km_boundary.csv')            ## excludes those > 2km from a prior deployment            
+# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_UTM10N_updated.csv')               ## excludes those that Robin said they would never travel      
+# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_cost_500m.csv')                    ## excludes those that Robin said would never travel, and those that are > 500m from a trail
+exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_50m.csv')                            ## excludes those that Robin said would never travel, and those that are > 50m from a trail/road, and those with a relative cost > 0.3
+trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['TrapID'])]        # Remove trap locations that are not accessible or > 2km away from prior deployment
 trap_coords_list = []
 for i in range(trap_coords.shape[0]):
     trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
 trap_coords_list = np.array(trap_coords_list)
+print(f"{trap_coords_list.shape} candidate trap locations")
 
 # Randomly select trap locations and activity centers -- Comment out when not testing
 np.random.shuffle(trap_coords_list)              # Randomly Shuffle
-trap_coords_list = (trap_coords_list)[:750]      # select the first 750 locations
+# trap_coords_list = (trap_coords_list)[:750]      # select the first 750 locations
 # trap_coords_list = np.load('./secr/New Density (x25)/200trap-2scenario/trap_coords_list.npy')         # If needed, upload an existing considered traps
-np.save('./secr/Backward Greedy/BG4/considered_trap_locs.npy', trap_coords_list)
+np.save('./secr/Backward Greedy/BG10/considered_trap_locs.npy', trap_coords_list)
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv('./secr/Backward Greedy/BG4/considered_trap_locs.csv', index=False)
+trap_coords_list_df.to_csv('./secr/Backward Greedy/BG10/considered_trap_locs.csv', index=False)
 
 # Calculate euclidean distances from traps to activity centers
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
@@ -278,13 +294,32 @@ distances = np.linalg.norm(differences, axis=2)
 
 scenarios = list(zip(*[D, g0, sigma, draw]))
 
+# log the starting time of backward greedy
+start_date = datetime.now()
+start_time = time.time()
+
+# Run backward greedy algorithm
 backward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances)
 
+# log the ending time of backward greedy
+end_time = time.time()
+end_date = datetime.now()
+
+# export the total runtime to a text file
+with open('secr/Backward Greedy/BG10/runtime.txt', 'w') as f:
+    # write the start time and date
+    f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    # write the total runtime in seconds
+    f.write(f"Start seconds: {start_time} seconds\n")
+    f.write(f"End seconds: {end_time} seconds\n")
+    f.write(f"Total runtime: {end_time - start_time} seconds\n")
+print(f"Total runtime: {end_time - start_time} seconds")
 
 # Generate Files for SECR Analysis
-trap_coords_list = np.load('secr/Backward Greedy/BG4/considered_trap_locs.npy')     # read in the traps considered in the algorithm run
+trap_coords_list = np.load('secr/Backward Greedy/BG10/considered_trap_locs.npy')     # read in the traps considered in the algorithm run
 
-with open('secr/Backward Greedy/BG4/activated_trap_hist.txt', 'r') as f:
+with open('secr/Backward Greedy/BG10/activated_trap_hist.txt', 'r') as f:
     lines = f.readlines()
 
 # Find the first line with exactly 60 elements
@@ -319,7 +354,7 @@ trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
 
 # get the x,y coords and index of the traps that were selected
 trap_coords_list_sub_df = trap_coords_list_sub_df.merge(trap_coords, on=['x', 'y'], how='left')
-trap_coords_list_sub_df.to_csv('secr/Backward Greedy/BG4/selected_traps.csv', index=False)
+trap_coords_list_sub_df.to_csv('secr/Backward Greedy/BG10/selected_traps.csv', index=False)
 trap_coords_list_sub_df
 
 # CORRECTED LOGIC: Find excluded trap IDs using set operations on Trap_index values
@@ -333,7 +368,7 @@ all_trap_ids = set(trap_coords['Trap_index'])
 excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
 # convert to txt file
-with open('secr/Backward Greedy/BG4/BG4-excluded_traps.txt', 'w') as f:
+with open('secr/Backward Greedy/BG10/BG10-excluded_traps.txt', 'w') as f:
     for item in excluded_trap_ids:
         f.write("%s\n" % item)
 
