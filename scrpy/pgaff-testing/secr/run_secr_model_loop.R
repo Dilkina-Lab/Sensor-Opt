@@ -34,7 +34,7 @@ plot(study_area, add = TRUE, col = "red")
 traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
 traps_500m<-traps_500m[-c(1)]
 
-exclude_traps <- read.table("SensorOpt/secr/Backward Greedy/BG8/BG8-excluded_traps-20.txt")  # Assumes one ID per line
+exclude_traps <- read.table("SensorOpt/secr/Backward Greedy/BG8/BG8-excluded_traps-68.txt")  # Assumes one ID per line
 
 optim_cams <- traps_500m %>% 
     filter(!Trap_index %in% exclude_traps$V1)  # V1 is default column name from read.table
@@ -97,7 +97,7 @@ true_N <- read.csv("True_N_per_draw.csv")
 
 # Define the range of draws you want to loop over
 start_draw <- 1
-end_draw <- 50
+end_draw <- 33
 
 # Your loop will look like this:
 results <- matrix(nrow=0, ncol=16)
@@ -196,5 +196,5 @@ for (i in start_draw:end_draw) {
     
 }
 
-file_name <- paste0("BG8_20cams_run2_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("BG8_68cams", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
