@@ -179,19 +179,19 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tr
     remaining_traps = [i for i, x in enumerate(trap_x) if int(x) == 1]
     print(f"Final remaining traps: {remaining_traps}")
 
-    with open('secr/Backward Greedy/BG9/activated_trap_hist.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG12/activated_trap_hist.txt', 'w') as f:
         for item in activated_trap_hist:
             f.write("%s\n" % item)
-    with open('secr/Backward Greedy/BG9/remove_hist.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG12/remove_hist.txt', 'w') as f:
         for item in remove_hist:
             f.write("%s\n" % item)
-    with open('secr/Backward Greedy/BG9/rse_hist.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG12/rse_hist.txt', 'w') as f:
         for item in RSE_hist:
             f.write("%s\n" % item)
-    with open('secr/Backward Greedy/BG9/rse_tracker.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG12/rse_tracker.txt', 'w') as f:
         for key, value in rse_tracker.items():
             f.write(f"Iteration {key}: {value}\n")
-    with open('secr/Backward Greedy/BG9/n_tracker.txt', 'w') as f:
+    with open('secr/Backward Greedy/BG12/n_tracker.txt', 'w') as f:
         for it, draw_dict in n_tracker.items():
             f.write(f"Iteration {it}:\n")
             for draw_id, vals in draw_dict.items():
@@ -202,9 +202,9 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tr
 # Read in parameter draws
 params = pd.read_csv('./500m_data/6-9 data/param_values_for_each_draw.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-true_n_filtered = true_n[true_n['N'].between(30, 80)]['Parameter_draw'].values.tolist()
-params = params[params['index'].isin(true_n_filtered)]
-params = params.iloc[:10, :]    # Only keep the first 50 draws for testing
+# true_n_filtered = true_n[true_n['N'].between(30, 80)]['Parameter_draw'].values.tolist()
+# params = params[params['index'].isin(true_n_filtered)]
+params = params.iloc[:50, :]    # Only keep the first 50 draws for testing
 
 D = params['D'].values
 g0 = params['g0'].values
@@ -220,17 +220,18 @@ ac_coords_list = np.array(ac_coords_list)
 
 trap_coords = pd.read_csv('./500m_data/500m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_50m.csv')
-trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['TrapID'])]
+# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_50m.csv')
+exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_prior.csv')
+trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]
 trap_coords_list = []
 for i in range(trap_coords.shape[0]):
     trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
 trap_coords_list = np.array(trap_coords_list)
 print(f"{trap_coords_list.shape} candidate trap locations")
 
-np.save('./secr/Backward Greedy/BG9/considered_trap_locs.npy', trap_coords_list)
+np.save('./secr/Backward Greedy/BG12/considered_trap_locs.npy', trap_coords_list)
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv('./secr/Backward Greedy/BG9/considered_trap_locs.csv', index=False)
+trap_coords_list_df.to_csv('./secr/Backward Greedy/BG12/considered_trap_locs.csv', index=False)
 
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
 centers = ac_coords_list[np.newaxis, :, :]  # Add a new axis to centers to make it 3D
@@ -247,7 +248,7 @@ backward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances, draw,
 end_time = time.time()
 end_date = datetime.now()
 
-with open('secr/Backward Greedy/BG9/runtime.txt', 'w') as f:
+with open('secr/Backward Greedy/BG12/runtime.txt', 'w') as f:
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"Start seconds: {start_time} seconds\n")
@@ -256,9 +257,9 @@ with open('secr/Backward Greedy/BG9/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Generate Files for SECR Analysis
-trap_coords_list = np.load('secr/Backward Greedy/BG9/considered_trap_locs.npy')     # read in the traps considered in the algorithm run
+trap_coords_list = np.load('secr/Backward Greedy/BG12/considered_trap_locs.npy')     # read in the traps considered in the algorithm run
 
-with open('secr/Backward Greedy/BG9/activated_trap_hist.txt', 'r') as f:
+with open('secr/Backward Greedy/BG12/activated_trap_hist.txt', 'r') as f:
     lines = f.readlines()
 
 # Find the first line with exactly 60 elements
@@ -268,12 +269,12 @@ for line in lines:
     cleaned = line.strip().replace('[', '').replace(']', '').replace(' ', '')
     if cleaned:  # Skip empty lines
         elements = cleaned.split(',')
-        if len(elements) == 60:
+        if len(elements) == 55:
             selected_line = cleaned
             break  # Remove this line if you want the LAST occurrence instead
 
 if not selected_line:
-    raise ValueError("No line with 60 elements found in the file")
+    raise ValueError("No line with 55 elements found in the file")
 
 # convert string to list of integers
 selected_traps = [int(x) for x in selected_line.split(',')]
@@ -293,7 +294,7 @@ trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
 
 # get the x,y coords and index of the traps that were selected
 trap_coords_list_sub_df = trap_coords_list_sub_df.merge(trap_coords, on=['x', 'y'], how='left')
-trap_coords_list_sub_df.to_csv('secr/Backward Greedy/BG9/selected_traps.csv', index=False)
+trap_coords_list_sub_df.to_csv('secr/Backward Greedy/BG12/selected_traps.csv', index=False)
 trap_coords_list_sub_df
 
 # CORRECTED LOGIC: Find excluded trap IDs using set operations on Trap_index values
@@ -307,7 +308,7 @@ all_trap_ids = set(trap_coords['Trap_index'])
 excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
 # convert to txt file
-with open('secr/Backward Greedy/BG9/BG9-excluded_traps.txt', 'w') as f:
+with open('secr/Backward Greedy/BG12/BG12-excluded_traps.txt', 'w') as f:
     for item in excluded_trap_ids:
         f.write("%s\n" % item)
 
