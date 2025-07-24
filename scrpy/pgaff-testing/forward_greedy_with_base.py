@@ -183,6 +183,7 @@ with open('./secr/Forward Greedy/FG14/runtime.txt', 'w') as f:
 
 print(f"Start time: {start_date}, End time: {end_date}")
 
+# ---------------------------------------------  PREPARE FILES FOR SECR --------------------------------------------- 
 # Save results
 np.save('./secr/Forward Greedy/FG14/all_selected_traps.npy', selected_traps)
 with open('./secr/Forward Greedy/FG14/en_hist.txt', 'w') as f:
