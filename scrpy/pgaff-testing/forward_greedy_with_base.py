@@ -42,6 +42,79 @@ def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
                                           density[s], distances, trap_x)] for s in range(len(g0))])
 
 # --------------------------------------------- FORWARD GREEDY FUNCTION --------------------------------------------- 
+# def forward_greedy_additions(scenarios, trap_locs, ac_locs, K, distances, draw, draw_to_trueN, deployed_indices, budget=10):
+#     D, g0, sigma, density_prior = [], [], [], []
+#     for s in range(len(scenarios)):
+#         D.append(scenarios[s][0])
+#         g0.append(scenarios[s][1])
+#         sigma.append(scenarios[s][2])
+#         path = f'only_trail/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+#         df = pd.read_csv(path)
+#         density_prior.append((df['D_mod'] * 25).values)
+
+#     n_traps = len(trap_locs)
+#     trap_x = np.zeros(n_traps)
+#     trap_x[deployed_indices] = 1
+
+#     selected = list(deployed_indices)
+#     en_hist, n_tracker = [], {}
+
+#     # Compute the expected N for the original 68 deployed traps
+#     initial_en = compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x)
+#     initial_avg_en = np.mean(initial_en)
+#     en_hist.append(initial_avg_en)
+#     n_tracker[0] = {
+#         draw[i]: [draw_to_trueN[draw[i]], initial_en[i][0], initial_en[i][0] - draw_to_trueN[draw[i]]]
+#         for i in range(len(draw))
+#     }
+
+#     # Begin adding 10 new traps
+#     pbar = tqdm(total=budget, desc="Adding new traps")
+#     for step in range(budget):
+
+#         curr_en = compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x)
+#         current_avg = np.mean(curr_en)
+
+#         candidates = []
+#         for i in range(n_traps):
+#             if trap_x[i] == 0:
+#                 # Check if this candidate is >500m from all currently selected cameras
+#                 if np.all(trap_to_trap_dist[i, selected] > 500):
+#                     candidates.append(i)
+#             # candidates = [i for i in range(n_traps) if trap_x[i] == 0]
+
+#         trap_x_candidates = [trap_x.copy() for _ in candidates]
+#         for i, idx in enumerate(candidates):
+#             trap_x_candidates[i][idx] = 1
+
+#         func = partial(compute_expected_n_across_scenarios, ac_locs, trap_locs, g0, sigma, K, density_prior, distances)
+#         with mp.Pool(min(mp.cpu_count(), 10)) as pool:
+#             en_all = np.squeeze(np.array(pool.map(func, trap_x_candidates)))
+
+#         gains = np.mean(en_all, axis=1) - current_avg
+#         best = candidates[np.argmax(gains)]
+#         trap_x[best] = 1
+#         selected.append(best)
+#         en_hist.append(np.mean(en_all[np.argmax(gains)]))
+
+#         est_Ns = en_all[np.argmax(gains)]
+#         n_tracker[step + 1] = {
+#             draw[i]: [draw_to_trueN[draw[i]], est_Ns[i], est_Ns[i] - draw_to_trueN[draw[i]]]
+#             for i in range(len(draw))
+#         }
+
+#         print(f"Step {step+1}: +Trap {best}, Gain = {gains[np.argmax(gains)]:.2f}")
+#         pbar.update(1)
+#     pbar.close()
+
+#     with open('./secr/Forward Greedy/FG18/n_tracker.txt', 'w') as f:
+#         for step, records in n_tracker.items():
+#             f.write(f"Step {step}:\n")
+#             for d, values in records.items():
+#                 f.write(f"  Draw {d}: TrueN={values[0]}, EstN={values[1]}, Diff={values[2]}\n")
+
+#     return selected, en_hist, trap_x
+
 def forward_greedy_additions(scenarios, trap_locs, ac_locs, K, distances, draw, draw_to_trueN, deployed_indices, budget=10):
     D, g0, sigma, density_prior = [], [], [], []
     for s in range(len(scenarios)):
@@ -57,55 +130,84 @@ def forward_greedy_additions(scenarios, trap_locs, ac_locs, K, distances, draw, 
     trap_x[deployed_indices] = 1
 
     selected = list(deployed_indices)
-    en_hist, n_tracker = [], {}
 
-    # Compute the expected N for the original 68 deployed traps
-    initial_en = compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x)
+    # Precompute pairwise trap-to-trap distances for enforcing 500m rule
+    trap_to_trap_dist = np.linalg.norm(
+        trap_locs[:, np.newaxis, :] - trap_locs[np.newaxis, :, :], axis=2
+    )
+
+    en_hist = {}
+    n_tracker = {}
+
+    # Compute the expected N for originally deployed traps
+    initial_en = compute_expected_n_across_scenarios(
+        ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x
+    )
     initial_avg_en = np.mean(initial_en)
-    en_hist.append(initial_avg_en)
-    n_tracker[0] = {
-        draw[i]: [draw_to_trueN[draw[i]], initial_en[i][0], initial_en[i][0] - draw_to_trueN[draw[i]]]
-        for i in range(len(draw))
+    en_hist = [initial_avg_en]
+    n_tracker = {
+        0: {
+            draw[i]: [draw_to_trueN[draw[i]], initial_en[i][0], initial_en[i][0] - draw_to_trueN[draw[i]]]
+            for i in range(len(draw))
+        }
     }
 
-    # Begin adding 10 new traps
     pbar = tqdm(total=budget, desc="Adding new traps")
     for step in range(budget):
-        curr_en = compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x)
+        curr_en = compute_expected_n_across_scenarios(
+            ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x
+        )
         current_avg = np.mean(curr_en)
-        candidates = [i for i in range(n_traps) if trap_x[i] == 0]
 
+        # Select candidates not yet deployed and >500m away from all selected traps
+        candidates = []
+        for i in range(n_traps):
+            if trap_x[i] == 0:
+                # Check distance to all selected traps
+                if np.all(trap_to_trap_dist[i, selected] > 500):
+                    candidates.append(i)
+
+        if not candidates:
+            print("No further candidates meet the 500m distance constraint. Stopping early.")
+            break
+
+        # Create modified trap_x arrays for multiprocessing (for each candidate)
         trap_x_candidates = [trap_x.copy() for _ in candidates]
         for i, idx in enumerate(candidates):
             trap_x_candidates[i][idx] = 1
 
-        func = partial(compute_expected_n_across_scenarios, ac_locs, trap_locs, g0, sigma, K, density_prior, distances)
+        func = partial(
+            compute_expected_n_across_scenarios, ac_locs, trap_locs, g0, sigma, K, density_prior, distances
+        )
         with mp.Pool(min(mp.cpu_count(), 10)) as pool:
             en_all = np.squeeze(np.array(pool.map(func, trap_x_candidates)))
 
         gains = np.mean(en_all, axis=1) - current_avg
         best = candidates[np.argmax(gains)]
+
         trap_x[best] = 1
         selected.append(best)
         en_hist.append(np.mean(en_all[np.argmax(gains)]))
 
         est_Ns = en_all[np.argmax(gains)]
         n_tracker[step + 1] = {
-            draw[i]: [draw_to_trueN[draw[i]], est_Ns[i], est_Ns[i] - draw_to_trueN[draw[i]]]
-            for i in range(len(draw))
+            draw[i]: [draw_to_trueN[draw[i]], est_Ns[i], est_Ns[i] - draw_to_trueN[draw[i]]] for i in range(len(draw))
         }
 
         print(f"Step {step+1}: +Trap {best}, Gain = {gains[np.argmax(gains)]:.2f}")
         pbar.update(1)
+
     pbar.close()
 
-    with open('./secr/Forward Greedy/FG17/n_tracker.txt', 'w') as f:
-        for step, records in n_tracker.items():
-            f.write(f"Step {step}:\n")
+    # Save tracking info to a file if needed
+    with open('./secr/Forward Greedy/FG18/n_tracker.txt', 'w') as f:
+        for step_num, records in n_tracker.items():
+            f.write(f"Step {step_num}:\n")
             for d, values in records.items():
                 f.write(f"  Draw {d}: TrueN={values[0]}, EstN={values[1]}, Diff={values[2]}\n")
 
     return selected, en_hist, trap_x
+
 
 # ---------------------------------------------  LOAD DATA --------------------------------------------- 
 true_n = pd.read_csv('./only_trail/True_N_per_draw.csv')
@@ -146,7 +248,7 @@ candidate_exclusive = candidate_grid[~candidate_grid['Trap_index'].isin(deployed
 combined_traps = pd.concat([deployed_df, candidate_exclusive], ignore_index=True)
 trap_coords_list = combined_traps[['x', 'y']].values
 trap_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_df.to_csv('./secr/Forward Greedy/FG17/considered_trap_locs.csv', index=False)
+trap_df.to_csv('./secr/Forward Greedy/FG18/considered_trap_locs.csv', index=False)
 print(f"Total traps including deployed + candidates: {len(combined_traps)}")
 
 # Indices of deployed traps = first 68
@@ -159,7 +261,12 @@ centers = ac_coords_list[np.newaxis, :, :]
 distances = np.linalg.norm(traps - centers, axis=2)
 scenarios = list(zip(D, g0, sigma, draw))
 
-# Run forward greedy
+# Compute pairwise camera-to-camera distances (in meters)
+trap_to_trap_dist = np.linalg.norm(
+    trap_coords_list[:, np.newaxis, :] - trap_coords_list[np.newaxis, :, :], axis=2
+)
+
+# ---------------------------------------------  RUN FORWARD GREEDY ---------------------------------------------
 start = time.time()
 start_date = datetime.now()
 
@@ -176,7 +283,7 @@ end = time.time()
 end_date = datetime.now()
 print(f"Runtime: {end - start:.2f} seconds")
 
-with open('./secr/Forward Greedy/FG17/runtime.txt', 'w') as f:
+with open('./secr/Forward Greedy/FG18/runtime.txt', 'w') as f:
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"Start seconds: {start} seconds\n")
@@ -187,18 +294,18 @@ print(f"Start time: {start_date}, End time: {end_date}")
 
 # ---------------------------------------------  PREPARE FILES FOR SECR --------------------------------------------- 
 # Save results
-np.save('./secr/Forward Greedy/FG17/all_selected_traps.npy', selected_traps)
-with open('./secr/Forward Greedy/FG17/en_hist.txt', 'w') as f:
+np.save('./secr/Forward Greedy/FG18/all_selected_traps.npy', selected_traps)
+with open('./secr/Forward Greedy/FG18/en_hist.txt', 'w') as f:
     for e in en_hist:
         f.write(f"{e}\n")
-with open('./secr/Forward Greedy/FG17/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Forward Greedy/FG18/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 
 # Export selected trap info
 selected_arr = np.array(selected_traps)
 final_df = trap_df.iloc[selected_arr].copy()
 final_df['Trap_index'] = combined_traps.iloc[selected_arr]['Trap_index'].values
-final_df.to_csv('./secr/Forward Greedy/FG17/selected_traps.csv', index=False)
+final_df.to_csv('./secr/Forward Greedy/FG18/selected_traps.csv', index=False)
 
 # Verification
 selected_trap_ids = set(final_df['Trap_index'].astype(int))
@@ -216,7 +323,7 @@ print(f"Exactly 10 new traps have been added.")
 universe_ids = set(full_trap_grid['Trap_index'])
 excluded_ids = sorted(universe_ids - selected_trap_ids)
 
-with open('./secr/Forward Greedy/FG17/FG17-excluded_traps.txt', 'w') as f:
+with open('./secr/Forward Greedy/FG18/FG18-excluded_traps.txt', 'w') as f:
     for tid in excluded_ids:
         f.write(f"{tid}\n")
 
