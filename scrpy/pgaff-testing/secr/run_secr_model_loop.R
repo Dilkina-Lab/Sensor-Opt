@@ -90,7 +90,7 @@ summary(covariates(mask1))
 #Arielle has added a loop here to go through all the parameter draws
 
 #Get true Ns for comparison later
-gcs_get_object("sim_update_7-2-2025/True_N_per_draw.csv", 
+gcs_get_object("sim_update_7-24-2025/True_N_per_draw.csv", 
                bucket = "pgaff_simulations", 
                saveToDisk = "True_N_per_draw.csv", 
                overwrite=TRUE)
