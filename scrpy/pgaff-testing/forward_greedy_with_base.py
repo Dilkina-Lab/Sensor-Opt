@@ -99,7 +99,7 @@ def forward_greedy_additions(scenarios, trap_locs, ac_locs, K, distances, draw, 
         pbar.update(1)
     pbar.close()
 
-    with open('./secr/Forward Greedy/FG16/n_tracker.txt', 'w') as f:
+    with open('./secr/Forward Greedy/FG17/n_tracker.txt', 'w') as f:
         for step, records in n_tracker.items():
             f.write(f"Step {step}:\n")
             for d, values in records.items():
@@ -113,7 +113,7 @@ true_n = pd.read_csv('./only_trail/True_N_per_draw.csv')
 
 params = pd.read_csv('./only_trail/param_values_for_each_draw150.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-params = params.sample(n=5).reset_index(drop=True)                          # Randomly select 5 draws
+params = params.sample(n=50).reset_index(drop=True)                          # Randomly select 50 draws
 # params = params[params['index'].isin(valid_ids)].iloc[:5]
 print(f"Using {params['index'].tolist()} parameter draws")
 
@@ -146,7 +146,7 @@ candidate_exclusive = candidate_grid[~candidate_grid['Trap_index'].isin(deployed
 combined_traps = pd.concat([deployed_df, candidate_exclusive], ignore_index=True)
 trap_coords_list = combined_traps[['x', 'y']].values
 trap_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_df.to_csv('./secr/Forward Greedy/FG16/considered_trap_locs.csv', index=False)
+trap_df.to_csv('./secr/Forward Greedy/FG17/considered_trap_locs.csv', index=False)
 print(f"Total traps including deployed + candidates: {len(combined_traps)}")
 
 # Indices of deployed traps = first 68
@@ -176,7 +176,7 @@ end = time.time()
 end_date = datetime.now()
 print(f"Runtime: {end - start:.2f} seconds")
 
-with open('./secr/Forward Greedy/FG16/runtime.txt', 'w') as f:
+with open('./secr/Forward Greedy/FG17/runtime.txt', 'w') as f:
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"Start seconds: {start} seconds\n")
@@ -187,18 +187,18 @@ print(f"Start time: {start_date}, End time: {end_date}")
 
 # ---------------------------------------------  PREPARE FILES FOR SECR --------------------------------------------- 
 # Save results
-np.save('./secr/Forward Greedy/FG16/all_selected_traps.npy', selected_traps)
-with open('./secr/Forward Greedy/FG16/en_hist.txt', 'w') as f:
+np.save('./secr/Forward Greedy/FG17/all_selected_traps.npy', selected_traps)
+with open('./secr/Forward Greedy/FG17/en_hist.txt', 'w') as f:
     for e in en_hist:
         f.write(f"{e}\n")
-with open('./secr/Forward Greedy/FG16/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Forward Greedy/FG17/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 
 # Export selected trap info
 selected_arr = np.array(selected_traps)
 final_df = trap_df.iloc[selected_arr].copy()
 final_df['Trap_index'] = combined_traps.iloc[selected_arr]['Trap_index'].values
-final_df.to_csv('./secr/Forward Greedy/FG16/selected_traps.csv', index=False)
+final_df.to_csv('./secr/Forward Greedy/FG17/selected_traps.csv', index=False)
 
 # Verification
 selected_trap_ids = set(final_df['Trap_index'].astype(int))
@@ -216,7 +216,7 @@ print(f"Exactly 10 new traps have been added.")
 universe_ids = set(full_trap_grid['Trap_index'])
 excluded_ids = sorted(universe_ids - selected_trap_ids)
 
-with open('./secr/Forward Greedy/FG16/FG16-excluded_traps.txt', 'w') as f:
+with open('./secr/Forward Greedy/FG17/FG17-excluded_traps.txt', 'w') as f:
     for tid in excluded_ids:
         f.write(f"{tid}\n")
 
