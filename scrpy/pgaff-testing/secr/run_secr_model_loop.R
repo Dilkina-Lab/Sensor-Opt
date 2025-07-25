@@ -31,10 +31,11 @@ study_area <- st_transform(SA, crs = st_crs(TC))
 plot(study_area, add = TRUE, col = "red")
 
 ################ Make a traps object by subsetting the 500m grid ################
-traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
+# traps_500m<-read.csv("SensorOpt/secr/500m_trap_grid_4-24-25.csv")
+traps_500m<-read.csv("SensorOpt/only_trail/500m/trail_candidate_traps_spacing500.csv")
 traps_500m<-traps_500m[-c(1)]
 
-exclude_traps <- read.table("SensorOpt/secr/Backward Greedy/BG12/BG12-excluded_traps.txt")  # Assumes one ID per line
+exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG15/FG15-excluded_traps.txt")  # Assumes one ID per line
 
 optim_cams <- traps_500m %>% 
     filter(!Trap_index %in% exclude_traps$V1)  # V1 is default column name from read.table
@@ -48,12 +49,12 @@ traps1<-read.traps(data=traps12, detector="proximity")
 points(traps1, pch=16, col="blue")
 
 ########################## Make a mask #########################################
-gcs_get_object("sim_update_7-21-2025/param_values_for_each_draw150_7-21-25.csv", 
+gcs_get_object("sim_update_7-24-2025/param_values_for_each_draw150_7-24-25.csv", 
                bucket = "pgaff_simulations", 
-               saveToDisk = "param_values_for_each_draw150_7-21-25.csv", 
+               saveToDisk = "param_values_for_each_draw150_7-24-25.csv", 
                overwrite=TRUE)
 
-param_vals <- read.csv("param_values_for_each_draw150_7-21-25.csv")
+param_vals <- read.csv("param_values_for_each_draw150_7-24-25.csv")
 param_vals <- param_vals[-c(1)]
 
 #Buffer the SA by 2*sigma
@@ -89,15 +90,15 @@ summary(covariates(mask1))
 #Arielle has added a loop here to go through all the parameter draws
 
 #Get true Ns for comparison later
-gcs_get_object("sim_update_7-21-2025/True_N_per_draw.csv", 
+gcs_get_object("sim_update_7-2-2025/True_N_per_draw.csv", 
                bucket = "pgaff_simulations", 
                saveToDisk = "True_N_per_draw.csv", 
                overwrite=TRUE)
 true_N <- read.csv("True_N_per_draw.csv")
 
 # Define the range of draws you want to loop over
-start_draw <- 80
-end_draw <- 85
+start_draw <- 1
+end_draw <- 25
 
 # Results storage
 results <- matrix(nrow=0, ncol=16)
@@ -105,15 +106,15 @@ results <- matrix(nrow=0, ncol=16)
 # Loop over draws, skipping draw 52 if encountered
 for (i in start_draw:end_draw) {
     # Skip parameter draw 52
-    if (i == 84) next
-
+    if (i == 1000000) next
+    
     gc()
     
     draw<-i #Choose which param draw to use
     
     print(draw)
     
-    ch<-read.csv(paste("SensorOpt/500m_data/7-21 data/ch/ch_draw_",draw,".csv", sep=""))
+    ch<-read.csv(paste("SensorOpt/only_trail/500m/ch/ch_draw_",draw,".csv", sep=""))
     
     #Constrain to only traps in traps1. Not that not all traps will appear if some 
     #did not detect any animals
@@ -199,5 +200,5 @@ for (i in start_draw:end_draw) {
     
 }
 
-file_name <- paste0("BG12_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("FG15_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
