@@ -37,7 +37,7 @@ traps_500m <- read.csv("SensorOpt/only_trail/500m/trail_candidate_traps_spacing5
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG20/FG20-excluded_traps.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG23/FG23-excluded_traps.txt", col.names = "Trap_index")
 
 # Filter out excluded traps
 optim_cams <- traps_500m %>% 
@@ -197,5 +197,5 @@ for (draw in start_draw:end_draw) {
   
 }
 
-file_name <- paste0("FG20_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("FG23_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
