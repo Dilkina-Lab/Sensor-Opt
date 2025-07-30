@@ -164,7 +164,7 @@ def forward_greedy_additions(scenarios, trap_locs, ac_locs, K, distances, draw, 
         for i in range(n_traps):
             if trap_x[i] == 0:
                 # Check distance to all selected traps
-                if np.all(trap_to_trap_dist[i, selected] > 500):
+                if np.all(trap_to_trap_dist[i, selected] > 1000):
                     candidates.append(i)
 
         if not candidates:
