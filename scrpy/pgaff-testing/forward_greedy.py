@@ -69,7 +69,7 @@ def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
         e_n[s,0] = compute_expected_n(ac_locs, trap_locs, g0[s], sigma[s], K, density[s], distances, trap_x)
     return(e_n)
 
-def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_to_trueN, budget=55):
+def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_to_trueN, budget=100):
     """
     Forward greedy algorithm to select 'budget' trap locations that maximize expected detections E(n).
     """
@@ -78,7 +78,7 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
         D.append(scenarios[s][0])
         g0.append(scenarios[s][1])
         sigma.append(scenarios[s][2])
-        density_prior_file = f'500m_data/7-21 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+        density_prior_file = f'full_grid_500m/8-1 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_df = pd.read_csv(density_prior_file)
         density_df['cell_density'] = density_df['D_mod'] * 25
         density_prior.append(density_df['cell_density'].values.tolist())
@@ -159,7 +159,7 @@ true_n_filtered = true_n_filtered['Parameter_draw'].values.tolist()      # Get t
 params = pd.read_csv('./full_grid_500m/8-1 data/param_values_for_each_draw150.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
 params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
-params = params.iloc[:5, :]                                              # Only keep the first two draws for testing
+params = params.sample(n=5)                                                 # Randomly select 5 draws for testing
 
 # Extract parameter values
 D, g0, sigma = params['D'].values, params['g0'].values, params['sigma'].values
@@ -177,10 +177,10 @@ ac_coords_list = np.array(ac_coords_list)
 # Read in potential trap locations
 trap_coords = pd.read_csv('./full_grid_500m/500m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_PLUS_2km_boundary.csv')       # Read in trap locations that are from robin or > 2km away from prior deployment           
-exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
-# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_cost_500m.csv')               # robin removal and greater than 500m to trail
-# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_50m.csv')                     # robin removal and greater than 50m to trail
+exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_PLUS_2km_boundary.csv')       # Read in trap locations that are from robin or > 2km away from prior deployment           
+# exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
+# exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_cost_500m.csv')               # robin removal and greater than 500m to trail
+# exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_50m.csv')                     # robin removal and greater than 50m to trail
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_prior.csv')              # Read in trap locations that are from prior deployment
 trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]
 trap_coords_list = []
@@ -209,7 +209,7 @@ start_date = datetime.now()
 start_time = time.time()
 
 # Run the forward greedy algorithm
-selected_traps, en_hist, trap_x = forward_greedy_max_en(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN, budget=55)
+selected_traps, en_hist, trap_x = forward_greedy_max_en(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN, budget=100)
 
 # log the ending time of backward greedy
 end_date = datetime.now()
@@ -245,7 +245,7 @@ print("Expected number of detections history:", en_hist)
 trap_coords_list = pd.read_csv('./secr/Forward Greedy/FG35/considered_trap_locs.csv')
 selected_traps = np.load('./secr/Forward Greedy/FG35/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
-selected_traps = selected_traps[:68]  # Limit to first 60 traps for testing
+selected_traps = selected_traps[:70]  # Limit to first 70 traps for testing
 selected_traps = np.sort(selected_traps)
 
 # subset trap_coords_list to include ONLY the selected trap indices
@@ -254,7 +254,7 @@ trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df.index + 1  # Adj
 trap_coords_list_sub_df.to_csv('secr/Forward Greedy/FG35/selected_traps.csv', index=True)
 
 # get all the potential trap coordinates
-trap_coords = pd.read_csv('500m_data/500m_trap_grid.csv')
+trap_coords = pd.read_csv('full_grid500m_data/500m_trap_grid.csv')
 trap_coords = trap_coords.rename(columns={'X': 'x', 'Y': 'y'})
 trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
 

@@ -3,3 +3,4 @@ src/__pycache__/
 .vscode/
 data/
 logs/
+.DS_Store
