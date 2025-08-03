@@ -38,7 +38,7 @@ traps_500m <- read.csv("SensorOpt/full_grid_500m/500m_trap_grid.csv")
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG3/FG3-excluded_traps-70.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG35/FG35-excluded_traps-70.txt", col.names = "Trap_index")
 
 
 # Filter out excluded traps
@@ -61,7 +61,7 @@ names(traps_df) <- c("trapID", "x", "y")
 
 ########################## Make a mask #########################################
 gcs_get_object(
-  "sim_update_8-1-2025/param_values_for_each_draw150_7-24-25.csv",
+  "sim_update_8-1-2025_500mgrid/param_values_for_each_draw150_7-24-25.csv",
   bucket = "pgaff_simulations",
   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
   overwrite = TRUE
@@ -107,7 +107,7 @@ summary(covariates(mask1))
 
 ############################# load true Ns for comparison #####################
 gcs_get_object(
-  "sim_update_8-1-2025/True_N_per_draw.csv",
+  "sim_update_8-1-2025_500mgrid/True_N_per_draw.csv",
   bucket = "pgaff_simulations",
   saveToDisk = "True_N_per_draw.csv",
   overwrite = TRUE
@@ -199,6 +199,6 @@ for (draw in start_draw:end_draw) {
   
 }
 
-file_name <- paste0("FG3_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("FG35_", start_draw, "-", end_draw, ".csv")
 
 write.csv(results, file = file_name, row.names = FALSE)
