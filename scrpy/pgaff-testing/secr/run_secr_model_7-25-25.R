@@ -127,8 +127,8 @@ gcs_get_object(
 )
 true_N <- read.csv("True_N_per_draw.csv")
 
-start_draw <- 106
-end_draw <- 120
+start_draw <- 46
+end_draw <- 60
 
 results <- matrix(nrow = 0, ncol = 16)
 
