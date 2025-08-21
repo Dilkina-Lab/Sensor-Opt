@@ -33,12 +33,16 @@ plot(SA_proj, add = TRUE, col = "red")
 
 
 # Load 500m trap grid
-traps_500m <- read.csv("SensorOpt/full_grid_500m/500m_trap_grid.csv")
+# traps_500m <- read.csv("SensorOpt/full_grid_500m/500m_trap_grid.csv")
+# traps_500m <- traps_500m[-c(1)]
+traps_500m <- read.csv("SensorOpt/full_grid_1km/1000m_trap_grid.csv")
 traps_500m <- traps_500m[-c(1)]
 
 
+
 # Load list of traps to remove
-traps_to_remove <- read.csv("SensorOpt/secr/traps_to_remove_50m.csv")
+# traps_to_remove <- read.csv("SensorOpt/secr/traps_to_remove_500m.csv")
+traps_to_remove <- read.csv("SensorOpt/full_grid_1km/traps_to_remove_1km.csv")
 remove_indices <- traps_to_remove$Trap_index
 
 
@@ -117,14 +121,21 @@ traps1 <- read.traps(data = traps12, detector = "proximity")
 # traps12 holds your selected trap points as a plain data frame with columns x and y
 # Just write it out as CSV to save the trap positions with their coordinates
 write.csv(traps12 %>% dplyr::select(Trap_index, x, y), 
-          "U_80A_SelectedTrapCoordinates.csv", 
+          "U_80A_1km_SelectedTrapCoordinates.csv", 
           row.names = FALSE)
 
 
 
 ########################## Make a mask #########################################
+# gcs_get_object(
+#   "sim_update_8-1-2025_500mgrid/param_values_for_each_draw150_7-24-25.csv",
+#   bucket = "pgaff_simulations",
+#   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
+#   overwrite = TRUE
+# )
+
 gcs_get_object(
-  "sim_update_8-1-2025_500mgrid/param_values_for_each_draw150_7-24-25.csv",
+  "sim_8-14-2025_1kmgrid/param_values_for_each_draw150_7-24-25.csv",
   bucket = "pgaff_simulations",
   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
   overwrite = TRUE
@@ -165,12 +176,20 @@ summary(covariates(mask1))
 
 
 ############################# load up a ch #####################################
+# gcs_get_object(
+#   "sim_update_8-1-2025_500mgrid/True_N_per_draw.csv",
+#   bucket = "pgaff_simulations",
+#   saveToDisk = "True_N_per_draw.csv",
+#   overwrite = TRUE
+# )
+
 gcs_get_object(
-  "sim_update_8-1-2025_500mgrid/True_N_per_draw.csv",
+  "sim_8-14-2025_1kmgrid/True_N_per_draw.csv",
   bucket = "pgaff_simulations",
   saveToDisk = "True_N_per_draw.csv",
   overwrite = TRUE
 )
+
 true_N <- read.csv("True_N_per_draw.csv")
 
 
@@ -184,7 +203,9 @@ for (i in start_draw:end_draw) {
     draw <- i
     print(draw)
     
-    ch <- read.csv(paste0("SensorOpt/full_grid_500m/8-1 data/ch/ch_draw_", draw, ".csv"))
+    # ch <- read.csv(paste0("SensorOpt/full_grid_1km/8-1 data/ch/ch_draw_", draw, ".csv"))
+    ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
+
     
     ch2 <- ch %>% filter(trap_id %in% traps12$Trap_index) %>%
         mutate(animal=individual,
@@ -216,7 +237,7 @@ for (i in start_draw:end_draw) {
                                           method="Nelder-Mead", 
                                           start=list(D=0.0001, g0=0.5, sigma=3000)))
         
-        saveRDS(fit_model, file=paste("model_U_80A.RDS"))
+        saveRDS(fit_model, file=paste("model_U_80A_1km.RDS"))
         
         out <- data.frame(
             Draw=draw,
@@ -266,5 +287,5 @@ for (i in start_draw:end_draw) {
 
 
 
-file_name <- paste0("U_80A_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("U_80A_1km_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
