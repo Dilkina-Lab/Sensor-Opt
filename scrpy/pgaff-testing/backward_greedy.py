@@ -85,7 +85,7 @@ def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
     return(e_c)
 
 # Read in True N file and construct dictionary of draw ID to true N
-true_n = pd.read_csv('./500m_data/6-9 data/True_N_per_draw.csv')
+true_n = pd.read_csv('./full_grid_1km/True_N_per_draw.csv')
 draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 
 def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_trueN):
@@ -106,7 +106,7 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tr
         g0.append(scenarios[s][1])
         sigma.append(scenarios[s][2])
 
-        density_prior_file =  f'500m_data/6-9 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+        density_prior_file =  f'500m_data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_df = pd.read_csv(density_prior_file)
         density_df['D_mod'] = density_df['D_mod'] * 25
         density_prior.append(density_df['D_mod'].values.tolist())
