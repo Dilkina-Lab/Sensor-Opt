@@ -104,20 +104,20 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
             ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x
         )
         current_avg_en = np.mean(current_en_per_scenario)
-        # candidates = [i for i in range(n_traps) if trap_x[i] == 0]
+        candidates = [i for i in range(n_traps) if trap_x[i] == 0]
 
         # Select candidates not yet deployed and >500m away from all selected traps
-        candidates = []
-        for i in range(n_traps):
-            if trap_x[i] == 0:
-                # Check distance to all selected traps
-                if np.all(trap_to_trap_dist[i, selected_traps] > 1000):
-                    candidates.append(i)
-        print("Candidates available for addition:", len(candidates))
+        # candidates = []
+        # for i in range(n_traps):
+        #     if trap_x[i] == 0:
+        #         # Check distance to all selected traps
+        #         if np.all(trap_to_trap_dist[i, selected_traps] > 1000):
+        #             candidates.append(i)
+        # print("Candidates available for addition:", len(candidates))
 
-        if not candidates:
-            print("No further candidates meet the 1km distance constraint. Stopping early.")
-            break
+        # if not candidates:
+        #     print("No further candidates meet the 1km distance constraint. Stopping early.")
+        #     break
 
         trap_x_candidates = []
         for candidate_idx in candidates:
