@@ -80,11 +80,11 @@ def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_t
         D.append(scenarios[s][0])
         g0.append(scenarios[s][1])
         sigma.append(scenarios[s][2])
-        density_prior_file = f'full_grid_500m/8-1 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+        # density_prior_file = f'full_grid_500m/8-1 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+        density_prior_file = f'full_grid_1km/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_df = pd.read_csv(density_prior_file)
         density_df['cell_density'] = density_df['D_mod'] * 25
         density_prior.append(density_df['cell_density'].values.tolist())
-
 
     n_traps = len(trap_locs)
     trap_x = np.zeros(n_traps)
@@ -121,10 +121,9 @@ def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_t
 
     heap = [(-marginal_gains[i], initial_candidates[i], en_per_candidate_init[i, :]) 
             for i in range(len(initial_candidates))]
-    import heapq
+
     heapq.heapify(heap)
 
-    from tqdm import tqdm
     pbar = tqdm(total=budget, desc="Lazy Greedy Progress")
 
     for step in range(budget):
@@ -174,15 +173,19 @@ def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_t
 
 # Read in True N file
 # true_n = pd.read_csv('./500m_data/True_N_per_draw.csv')
-true_n = pd.read_csv('./full_grid_500m/8-1 data/True_N_per_draw.csv')
+# true_n = pd.read_csv('./full_grid_500m/8-1 data/True_N_per_draw.csv')
+true_n = pd.read_csv('./full_grid_1km/True_N_per_draw.csv')
+
 true_n_filtered = true_n[true_n['N'].between(1, 120)]                    # CHANGE DEPENDING ON NEED
 true_n_filtered = true_n_filtered['Parameter_draw'].values.tolist()      # Get the parameter draw IDS
 
 # Read in parameter draws
-params = pd.read_csv('./full_grid_500m/8-1 data/param_values_for_each_draw150.csv')
+# params = pd.read_csv('./full_grid_500m/8-1 data/param_values_for_each_draw150.csv')
+params = pd.read_csv('./full_grid_1km/param_values_for_each_draw150.csv')
+
 params = params.rename(columns={'Unnamed: 0': 'index'})
 params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
-params = params.sample(n=50)                                                 # Randomly select 5 draws for testing
+params = params.sample(n=5)                                                 # Randomly select 5 draws for testing
 
 # Extract parameter values
 D, g0, sigma = params['D'].values, params['g0'].values, params['sigma'].values
@@ -192,7 +195,8 @@ K= 5                                        # Number of sampling periods
 print(f"Parameter draws evaluated over: {draw}")
 
 # Read in potential activity center locations
-ac_coords = pyreadr.read_r('./full_grid_500m/500m_mask.RDS')
+# ac_coords = pyreadr.read_r('./full_grid_500m/500m_mask.RDS')
+ac_coords = pyreadr.read_r('./full_grid_1km/500m_mask.RDS')
 ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values.tolist()
 ac_coords_list = np.array(ac_coords_list)
@@ -200,8 +204,10 @@ ac_coords_list = np.array(ac_coords_list)
 # Read in potential trap locations
 trap_coords = pd.read_csv('./full_grid_500m/500m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-# exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_PLUS_2km_boundary.csv')       # Read in trap locations that are from robin or > 2km away from prior deployment           
-exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
+# exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_PLUS_2km_boundary.csv')       # Read in trap locations that are from robin or > 2km away from prior deployment
+# exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
+exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')            # remove traps that robin would never travel to
+
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_cost_500m.csv')               # robin removal and greater than 500m to trail
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_50m.csv')                     # robin removal and greater than 50m to trail
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_prior.csv')              # Read in trap locations that are from prior deployment
