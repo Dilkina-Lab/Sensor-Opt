@@ -131,9 +131,9 @@ def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_t
             neg_gain, candidate, cached_en_per_scenario = heapq.heappop(heap)
             cached_gain = -neg_gain
 
-            # Enforce 1km spacing constraint
-            if selected_traps and not np.all(trap_to_trap_dist[candidate, selected_traps] > 1000):
-                continue
+            # # Enforce 1km spacing constraint
+            # if selected_traps and not np.all(trap_to_trap_dist[candidate, selected_traps] > 1000):
+            #     continue
 
             # Recompute marginal gain for this candidate
             trap_x_temp = np.copy(trap_x)
@@ -270,39 +270,90 @@ print("Selected traps:", selected_traps)
 print("Expected number of detections history:", en_hist)
 
 
-# Generate Files for SECR Analysis
-trap_coords_list = pd.read_csv('./secr/Lazy Greedy/LG1/considered_trap_locs.csv')
-selected_traps = np.load('./secr/Lazy Greedy/LG1/all_selected_traps.npy')
+# # Generate Files for SECR Analysis
+# trap_coords_list = pd.read_csv('./secr/Lazy Greedy/LG1/considered_trap_locs.csv')
+# selected_traps = np.load('./secr/Lazy Greedy/LG1/all_selected_traps.npy')
+# selected_traps = np.array(selected_traps)
+# selected_traps = selected_traps[:70]  # Limit to first 70 traps for testing
+# selected_traps = np.sort(selected_traps)
+
+# # subset trap_coords_list to include ONLY the selected trap indices
+# trap_coords_list_sub_df = trap_coords_list.iloc[selected_traps]
+# trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df.index + 1  # Adjust index to match SECR requirements
+# trap_coords_list_sub_df.to_csv('secr/Lazy Greedy/LG1/selected_traps.csv', index=True)
+
+# # get all the potential trap coordinates
+# # trap_coords = pd.read_csv('full_grid_500m/500m_trap_grid.csv')
+# trap_coords = pd.read_csv('full_grid_1km/1000m_trap_grid.csv')
+
+# trap_coords = trap_coords.rename(columns={'X': 'x', 'Y': 'y'})
+# trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
+
+# # CORRECTED LOGIC: Find excluded trap IDs using set operations on Trap_index values
+# # Get the Trap_index values for selected traps
+# selected_trap_ids = set(trap_coords_list_sub_df['Trap_index'])
+
+# # Get all Trap_index values from the full grid
+# all_trap_ids = set(trap_coords['Trap_index'])
+
+# # Excluded trap IDs are those in the full grid but NOT in selected_trap_ids
+# excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
+
+# # convert to txt file
+# with open('secr/Lazy Greedy/LG1/LG1-excluded_traps-70.txt', 'w') as f:
+#     for item in excluded_trap_ids:
+#         f.write("%s\n" % item)
+
+# print(f"Selected {len(selected_traps)} traps")
+# print(f"Excluded {len(excluded_trap_ids)} traps")
+# print(f"Total traps in full grid: {len(all_trap_ids)}")
+# print(f"Verification: {len(selected_trap_ids) + len(excluded_trap_ids)} should equal {len(all_trap_ids)}")
+
+
+
+# Paths
+base_dir = './secr/Lazy Greedy/LG1'
+trap_coords_list = pd.read_csv(f'{base_dir}/considered_trap_locs.csv')
+selected_traps = np.load(f'{base_dir}/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
-selected_traps = selected_traps[:70]  # Limit to first 70 traps for testing
 selected_traps = np.sort(selected_traps)
 
-# subset trap_coords_list to include ONLY the selected trap indices
-trap_coords_list_sub_df = trap_coords_list.iloc[selected_traps]
-trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df.index + 1  # Adjust index to match SECR requirements
-trap_coords_list_sub_df.to_csv('secr/Lazy Greedy/LG1/selected_traps.csv', index=True)
+# All trap coordinates (full grid)
+# trap_coords = pd.read_csv('full_grid_500m/500m_trap_grid.csv')
+trap_coords = pd.read_csv('full_grid_1km/1000m_trap_grid.csv')
 
-# get all the potential trap coordinates
-trap_coords = pd.read_csv('full_grid_500m/500m_trap_grid.csv')
 trap_coords = trap_coords.rename(columns={'X': 'x', 'Y': 'y'})
 trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
 
-# CORRECTED LOGIC: Find excluded trap IDs using set operations on Trap_index values
-# Get the Trap_index values for selected traps
-selected_trap_ids = set(trap_coords_list_sub_df['Trap_index'])
-
-# Get all Trap_index values from the full grid
 all_trap_ids = set(trap_coords['Trap_index'])
 
-# Excluded trap IDs are those in the full grid but NOT in selected_trap_ids
-excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
+# Make sure output directory exists
+os.makedirs(base_dir, exist_ok=True)
 
-# convert to txt file
-with open('secr/Lazy Greedy/LG1/LG1-excluded_traps-70.txt', 'w') as f:
-    for item in excluded_trap_ids:
-        f.write("%s\n" % item)
+# Loop over trap counts
+for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
+    # Take the first `n_cams` traps
+    traps_subset = selected_traps[:n_cams]
 
-print(f"Selected {len(selected_traps)} traps")
-print(f"Excluded {len(excluded_trap_ids)} traps")
-print(f"Total traps in full grid: {len(all_trap_ids)}")
-print(f"Verification: {len(selected_trap_ids) + len(excluded_trap_ids)} should equal {len(all_trap_ids)}")
+    # Subset trap coords by those traps
+    trap_coords_list_sub_df = trap_coords_list.iloc[traps_subset].copy()
+    trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df.index + 1  # Match SECR spec
+
+    # Save selected traps CSV
+    trap_csv_path = f'{base_dir}/selected_traps_{n_cams}.csv'
+    trap_coords_list_sub_df.to_csv(trap_csv_path, index=True)
+
+    # Determine excluded trap IDs
+    selected_trap_ids = set(trap_coords_list_sub_df['Trap_index'])
+    excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
+
+    # Save excluded IDs as TXT
+    excluded_txt_path = f'{base_dir}/LG1-excluded_traps-{n_cams}.txt'
+    with open(excluded_txt_path, 'w') as f:
+        for item in excluded_trap_ids:
+            f.write("%s\n" % item)
+
+    print(f"[{n_cams} cams] Selected {len(traps_subset)} traps, "
+          f"Excluded {len(excluded_trap_ids)} traps, "
+          f"Total traps in full grid: {len(all_trap_ids)}")
+    print(f"   Verification: {len(selected_trap_ids) + len(excluded_trap_ids)} = {len(all_trap_ids)}")
