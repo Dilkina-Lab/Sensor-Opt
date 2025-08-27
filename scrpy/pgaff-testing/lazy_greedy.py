@@ -70,30 +70,124 @@ def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
         e_n[s,0] = compute_expected_n(ac_locs, trap_locs, g0[s], sigma[s], K, density[s], distances, trap_x)
     return(e_n)
 
+# def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_to_trueN, budget=100):
+#     """
+#     Lazy Greedy algorithm for selecting 'budget' trap locations maximizing E(n).
+#     """
+#     # Extract scenario parameters
+#     D, g0, sigma, density_prior = [], [], [], []
+#     for s in range(len(scenarios)):
+#         D.append(scenarios[s][0])
+#         g0.append(scenarios[s][1])
+#         sigma.append(scenarios[s][2])
+#         # density_prior_file = f'full_grid_500m/8-1 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+#         density_prior_file = f'full_grid_1km/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+#         density_df = pd.read_csv(density_prior_file)
+#         density_df['cell_density'] = density_df['D_mod'] * 25
+#         density_prior.append(density_df['cell_density'].values.tolist())
+
+#     n_traps = len(trap_locs)
+#     trap_x = np.zeros(n_traps)
+#     selected_traps, en_hist, n_tracker = [], [], {}
+
+#     # Precompute trap-to-trap distances for spacing constraint
+#     trap_to_trap_dist = np.linalg.norm(
+#         trap_locs[:, np.newaxis, :] - trap_locs[np.newaxis, :, :], axis=2
+#     )
+
+#     # Initial E(n) with no traps
+#     current_en_per_scenario = compute_expected_n_across_scenarios(
+#         ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x
+#     )
+#     current_avg_en = np.mean(current_en_per_scenario)
+
+#     # Build candidate pool (respect spacing constraint against empty set ≡ all traps eligible)
+#     initial_candidates = list(range(n_traps))
+#     # Compute initial marginal gains for all candidates
+#     func = partial(compute_expected_n_across_scenarios,
+#                    ac_locs, trap_locs, g0, sigma, K, density_prior, distances)
+
+#     trap_x_candidates = []
+#     for i in initial_candidates:
+#         tx = np.copy(trap_x)
+#         tx[i] = 1
+#         trap_x_candidates.append(tx)
+
+#     with mp.Pool(min(mp.cpu_count(), 10)) as pool:
+#         en_per_candidate_init = np.squeeze(np.array(pool.map(func, trap_x_candidates)))
+
+#     avg_en_init = np.mean(en_per_candidate_init, axis=1)
+#     marginal_gains = avg_en_init - current_avg_en
+
+#     heap = [(-marginal_gains[i], initial_candidates[i], en_per_candidate_init[i, :]) 
+#             for i in range(len(initial_candidates))]
+
+#     heapq.heapify(heap)
+
+#     pbar = tqdm(total=budget, desc="Lazy Greedy Progress")
+
+#     for step in range(budget):
+#         while heap:
+#             neg_gain, candidate, cached_en_per_scenario = heapq.heappop(heap)
+#             cached_gain = -neg_gain
+
+#             # # Enforce 1km spacing constraint
+#             # if selected_traps and not np.all(trap_to_trap_dist[candidate, selected_traps] > 1000):
+#             #     continue
+
+#             # Recompute marginal gain for this candidate
+#             trap_x_temp = np.copy(trap_x)
+#             trap_x_temp[candidate] = 1
+#             new_en_per_scenario = compute_expected_n_across_scenarios(
+#                 ac_locs, trap_locs, g0, sigma, K, density_prior, distances, trap_x_temp
+#             )
+#             new_avg_en = np.mean(new_en_per_scenario)
+#             new_gain = new_avg_en - current_avg_en
+
+#             if not heap or new_gain >= -heap[0][0]:
+
+#                 trap_x[candidate] = 1
+#                 selected_traps.append(candidate)
+#                 en_hist.append(new_avg_en)
+#                 current_avg_en = new_avg_en
+
+#                 n_tracker[step + 1] = {}
+#                 for i, draw_id in enumerate(draw):
+#                     true_N = draw_to_trueN[draw_id]
+#                     est_N = new_en_per_scenario[i]
+#                     diff = est_N - true_N
+#                     n_tracker[step + 1][draw_id] = [true_N, est_N, diff]
+
+#                 print(f"Step {step+1}: Added trap {candidate}, E(n)={new_avg_en:.2f}, Gain={new_gain:.2f}")
+#                 pbar.update(1)
+#                 break
+#             else:
+#                 heapq.heappush(heap, (-new_gain, candidate, new_en_per_scenario))
+
+#         if not heap:
+#             print("No eligible candidates remain.")
+#             break
+
+#     pbar.close()
+#     return selected_traps, en_hist, trap_x, n_tracker
+
+
+
+
 def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_to_trueN, budget=100):
-    """
-    Lazy Greedy algorithm for selecting 'budget' trap locations maximizing E(n).
-    """
-    # Extract scenario parameters
+    # Extract scenario parameters (same as your code)
     D, g0, sigma, density_prior = [], [], [], []
     for s in range(len(scenarios)):
-        D.append(scenarios[s][0])
+        D.append(scenarios[s])
         g0.append(scenarios[s][1])
         sigma.append(scenarios[s][2])
-        # density_prior_file = f'full_grid_500m/8-1 data/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_prior_file = f'full_grid_1km/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_df = pd.read_csv(density_prior_file)
         density_df['cell_density'] = density_df['D_mod'] * 25
         density_prior.append(density_df['cell_density'].values.tolist())
-
     n_traps = len(trap_locs)
     trap_x = np.zeros(n_traps)
     selected_traps, en_hist, n_tracker = [], [], {}
-
-    # Precompute trap-to-trap distances for spacing constraint
-    trap_to_trap_dist = np.linalg.norm(
-        trap_locs[:, np.newaxis, :] - trap_locs[np.newaxis, :, :], axis=2
-    )
 
     # Initial E(n) with no traps
     current_en_per_scenario = compute_expected_n_across_scenarios(
@@ -101,41 +195,32 @@ def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_t
     )
     current_avg_en = np.mean(current_en_per_scenario)
 
-    # Build candidate pool (respect spacing constraint against empty set ≡ all traps eligible)
-    initial_candidates = list(range(n_traps))
     # Compute initial marginal gains for all candidates
+    initial_candidates = list(range(n_traps))
     func = partial(compute_expected_n_across_scenarios,
                    ac_locs, trap_locs, g0, sigma, K, density_prior, distances)
-
     trap_x_candidates = []
     for i in initial_candidates:
         tx = np.copy(trap_x)
         tx[i] = 1
         trap_x_candidates.append(tx)
-
     with mp.Pool(min(mp.cpu_count(), 10)) as pool:
         en_per_candidate_init = np.squeeze(np.array(pool.map(func, trap_x_candidates)))
-
     avg_en_init = np.mean(en_per_candidate_init, axis=1)
     marginal_gains = avg_en_init - current_avg_en
 
+    # Build max-heap: [(-gain, i, en_per_scenario)] for ALL still-eligible traps
+    # Python's heapq is min-heap, so use negative gains.
     heap = [(-marginal_gains[i], initial_candidates[i], en_per_candidate_init[i, :]) 
             for i in range(len(initial_candidates))]
-
     heapq.heapify(heap)
-
-    pbar = tqdm(total=budget, desc="Lazy Greedy Progress")
-
+    pbar = tqdm(total=budget, desc="True Lazy Greedy Progress")
+    
     for step in range(budget):
         while heap:
+            # Pop candidate with highest cached gain
             neg_gain, candidate, cached_en_per_scenario = heapq.heappop(heap)
-            cached_gain = -neg_gain
-
-            # # Enforce 1km spacing constraint
-            # if selected_traps and not np.all(trap_to_trap_dist[candidate, selected_traps] > 1000):
-            #     continue
-
-            # Recompute marginal gain for this candidate
+            # Recompute its true gain, since the objective is submodular
             trap_x_temp = np.copy(trap_x)
             trap_x_temp[candidate] = 1
             new_en_per_scenario = compute_expected_n_across_scenarios(
@@ -143,32 +228,36 @@ def lazy_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, draw_t
             )
             new_avg_en = np.mean(new_en_per_scenario)
             new_gain = new_avg_en - current_avg_en
+            # If still best, accept; otherwise, update heap and try next-best
+            if not heap or new_gain >= -heap[0][0]:
 
-            if not heap or new_gain >= -heap[0]:
                 trap_x[candidate] = 1
                 selected_traps.append(candidate)
                 en_hist.append(new_avg_en)
                 current_avg_en = new_avg_en
-
                 n_tracker[step + 1] = {}
                 for i, draw_id in enumerate(draw):
                     true_N = draw_to_trueN[draw_id]
                     est_N = new_en_per_scenario[i]
                     diff = est_N - true_N
                     n_tracker[step + 1][draw_id] = [true_N, est_N, diff]
-
                 print(f"Step {step+1}: Added trap {candidate}, E(n)={new_avg_en:.2f}, Gain={new_gain:.2f}")
                 pbar.update(1)
                 break
             else:
+                # Push back updated gain value, and continue with top of heap
                 heapq.heappush(heap, (-new_gain, candidate, new_en_per_scenario))
-
         if not heap:
             print("No eligible candidates remain.")
             break
-
     pbar.close()
     return selected_traps, en_hist, trap_x, n_tracker
+
+
+
+
+
+
 
 
 # Read in True N file
@@ -202,7 +291,7 @@ ac_coords_list = ac_coords[['x', 'y']].values.tolist()
 ac_coords_list = np.array(ac_coords_list)
 
 # Read in potential trap locations
-trap_coords = pd.read_csv('./full_grid_500m/500m_trap_grid.csv')
+trap_coords = pd.read_csv('./full_grid_1km/1000m_trap_grid.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_PLUS_2km_boundary.csv')       # Read in trap locations that are from robin or > 2km away from prior deployment
 # exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
@@ -316,7 +405,6 @@ base_dir = './secr/Lazy Greedy/LG1'
 trap_coords_list = pd.read_csv(f'{base_dir}/considered_trap_locs.csv')
 selected_traps = np.load(f'{base_dir}/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
-selected_traps = np.sort(selected_traps)
 
 # All trap coordinates (full grid)
 # trap_coords = pd.read_csv('full_grid_500m/500m_trap_grid.csv')
