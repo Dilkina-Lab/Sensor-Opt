@@ -160,7 +160,7 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
     pbar.close()
 
     # Save n_tracker to file
-    with open('secr/Forward Greedy/FG56-2/n_tracker.txt', 'w') as f:
+    with open('secr/Forward Greedy/FG56-3/n_tracker.txt', 'w') as f:
         for step, entry in n_tracker.items():
             f.write(f"Step {step}:\n")
             for draw_id, metrics in entry.items():
@@ -219,9 +219,9 @@ trap_coords_list = np.array(trap_coords_list)
 # Randomly select trap locations and activity centers -- Comment out when not testing
 # np.random.shuffle(trap_coords_list)              # Randomly Shuffle
 # trap_coords_list = (trap_coords_list)[:750]      # select the first 750 locations
-# trap_coords_list = np.load('./secr/Forward Greedy/FG56-2/considered_trap_locs.npy')         # If needed, upload an existing considered traps - keep consistent with backward greedy considered locations
+# trap_coords_list = np.load('./secr/Forward Greedy/FG56-3/considered_trap_locs.npy')         # If needed, upload an existing considered traps - keep consistent with backward greedy considered locations
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv('./secr/Forward Greedy/FG56-2/considered_trap_locs.csv', index=False)
+trap_coords_list_df.to_csv('./secr/Forward Greedy/FG56-3/considered_trap_locs.csv', index=False)
 
 # Calculate euclidean distances from traps to activity centers
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
@@ -243,7 +243,7 @@ end_date = datetime.now()
 end_time = time.time()
 
 # export the total runtime to a text file
-with open('secr/Forward Greedy/FG56-2/runtime.txt', 'w') as f:
+with open('secr/Forward Greedy/FG56-3/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -254,13 +254,13 @@ with open('secr/Forward Greedy/FG56-2/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results
-np.save('./secr/Forward Greedy/FG56-2/all_selected_traps.npy', selected_traps)
+np.save('./secr/Forward Greedy/FG56-3/all_selected_traps.npy', selected_traps)
 # Save the expected number of detections history as a txt file
-with open('./secr/Forward Greedy/FG56-2/en_hist.txt', 'w') as f:
+with open('./secr/Forward Greedy/FG56-3/en_hist.txt', 'w') as f:
     for en in en_hist:
         f.write(f"{en}\n")
 # Save the trap_x configuration
-with open('./secr/Forward Greedy/FG56-2/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Forward Greedy/FG56-3/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 # Print the selected traps
 print("Selected traps:", selected_traps)
@@ -269,8 +269,8 @@ print("Expected number of detections history:", en_hist)
 
 
 # # Generate Files for SECR Analysis
-# trap_coords_list = pd.read_csv('./secr/Forward Greedy/FG56-2/considered_trap_locs.csv')
-# selected_traps = np.load('./secr/Forward Greedy/FG56-2/all_selected_traps.npy')
+# trap_coords_list = pd.read_csv('./secr/Forward Greedy/FG56-3/considered_trap_locs.csv')
+# selected_traps = np.load('./secr/Forward Greedy/FG56-3/all_selected_traps.npy')
 # selected_traps = np.array(selected_traps)
 # selected_traps = selected_traps[:70]  # Limit to first 70 traps for testing
 # selected_traps = np.sort(selected_traps)
@@ -278,7 +278,7 @@ print("Expected number of detections history:", en_hist)
 # # subset trap_coords_list to include ONLY the selected trap indices
 # trap_coords_list_sub_df = trap_coords_list.iloc[selected_traps]
 # trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df.index + 1  # Adjust index to match SECR requirements
-# trap_coords_list_sub_df.to_csv('secr/Forward Greedy/FG56-2/selected_traps.csv', index=True)
+# trap_coords_list_sub_df.to_csv('secr/Forward Greedy/FG56-3/selected_traps.csv', index=True)
 
 # # get all the potential trap coordinates
 # trap_coords = pd.read_csv('full_grid_500m/500m_trap_grid.csv')
@@ -296,7 +296,7 @@ print("Expected number of detections history:", en_hist)
 # excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
 # # convert to txt file
-# with open('secr/Forward Greedy/FG56-2/FG56-2-excluded_traps-70.txt', 'w') as f:
+# with open('secr/Forward Greedy/FG56-3/FG56-3-excluded_traps-70.txt', 'w') as f:
 #     for item in excluded_trap_ids:
 #         f.write("%s\n" % item)
 
@@ -308,7 +308,7 @@ print("Expected number of detections history:", en_hist)
 
 
 # Paths
-base_dir = './secr/Forward Greedy/FG56-2'
+base_dir = './secr/Forward Greedy/FG56-3'
 trap_coords_list = pd.read_csv(f'{base_dir}/considered_trap_locs.csv')
 selected_traps = np.load(f'{base_dir}/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
@@ -343,7 +343,7 @@ for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
     excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
     # Save excluded IDs as TXT
-    excluded_txt_path = f'{base_dir}/FG56-2-excluded_traps-{n_cams}.txt'
+    excluded_txt_path = f'{base_dir}/FG56-3-excluded_traps-{n_cams}.txt'
     with open(excluded_txt_path, 'w') as f:
         for item in excluded_trap_ids:
             f.write("%s\n" % item)
