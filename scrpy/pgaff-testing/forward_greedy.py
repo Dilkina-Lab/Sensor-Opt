@@ -160,7 +160,7 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
     pbar.close()
 
     # Save n_tracker to file
-    with open('secr/Forward Greedy/FG57/n_tracker.txt', 'w') as f:
+    with open('secr/Sample Average Approximation/SA1/SA1-2/n_tracker.txt', 'w') as f:
         for step, entry in n_tracker.items():
             f.write(f"Step {step}:\n")
             for draw_id, metrics in entry.items():
@@ -172,17 +172,20 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
 
 # Read in True N file
 # true_n = pd.read_csv('./500m_data/True_N_per_draw.csv')
-true_n = pd.read_csv('./full_grid_500m/8-1 data/True_N_per_draw.csv')
+true_n = pd.read_csv('./full_grid_1km/9-5 data/True_N_per_draw.csv')
 # true_n = pd.read_csv('./full_grid_1km/True_N_per_draw.csv')
-true_n_filtered = true_n[true_n['N'].between(1, 120)]                    # CHANGE DEPENDING ON NEED
-true_n_filtered = true_n_filtered['Parameter_draw'].values.tolist()      # Get the parameter draw IDS
+# true_n_filtered = true_n[true_n['N'].between(1, 120)]                    # CHANGE DEPENDING ON NEED
+# true_n_filtered = true_n_filtered['Parameter_draw'].values.tolist()      # Get the parameter draw IDS
 
 # Read in parameter draws
-# params = pd.read_csv('./full_grid_1km/param_values_for_each_draw150.csv')
-params = pd.read_csv('./full_grid_500m/8-1 data/param_values_for_each_draw150.csv')
+params = pd.read_csv('./full_grid_1km/9-5 data/param_values_for_each_draw300_9-5-25.csv')
+# params = pd.read_csv('./full_grid_500m/8-1 data/param_values_for_each_draw150.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
-params = params.sample(n=5)                                                 # Randomly select 5 draws for testing
+# params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
+# params = params.sample(n=5)                                                 # Randomly select 5 draws for testing
+# use these param ids for training
+params_ids =  [82, 72, 43, 76, 93, 65, 61, 99, 62, 11]
+params = params[params['index'].isin(params_ids)]
 
 # Extract parameter values
 D, g0, sigma = params['D'].values, params['g0'].values, params['sigma'].values
@@ -192,21 +195,20 @@ K= 5                                        # Number of sampling periods
 print(f"Parameter draws evaluated over: {draw}")
 
 # Read in potential activity center locations
-# ac_coords = pyreadr.read_r('./full_grid_1km/500m_mask.RDS')
-ac_coords = pyreadr.read_r('./full_grid_500m/500m_mask.RDS')
+ac_coords = pyreadr.read_r('./full_grid_1km/9-5 data/500m_mask_8-14-25.RDS')
+# ac_coords = pyreadr.read_r('./full_grid_500m/500m_mask.RDS')
 
 ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values.tolist()
 ac_coords_list = np.array(ac_coords_list)
 
 # Read in potential trap locations
-trap_coords = pd.read_csv('./full_grid_500m/500m_trap_grid.csv')
-# trap_coords = pd.read_csv('./full_grid_1km/1000m_trap_grid.csv')
+# trap_coords = pd.read_csv('./full_grid_500m/500m_trap_grid.csv')
+trap_coords = pd.read_csv('./full_grid_1km/9-5 data/1000m_trap_grid_8-14-25.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_PLUS_2km_boundary.csv')       # Read in trap locations that are from robin or > 2km away from prior deployment           
-exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
-# exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')            # remove traps that robin would never travel to
-
+# exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_UTM10N_updated.csv')            # remove traps that robin would never travel to
+exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')            # remove traps that robin would never travel to
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_cost_500m.csv')               # robin removal and greater than 500m to trail
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_50m.csv')                     # robin removal and greater than 50m to trail
 # exclude_trap_coords = pd.read_csv('./full_grid_500m/traps_to_remove_prior.csv')              # Read in trap locations that are from prior deployment
@@ -222,7 +224,7 @@ trap_coords_list = np.array(trap_coords_list)
 # trap_coords_list = (trap_coords_list)[:750]      # select the first 750 locations
 # trap_coords_list = np.load('./secr/Forward Greedy/FG57/considered_trap_locs.npy')         # If needed, upload an existing considered traps - keep consistent with backward greedy considered locations
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv('./secr/Forward Greedy/FG57/considered_trap_locs.csv', index=False)
+trap_coords_list_df.to_csv('./secr/Sample Average Approximation/SA1/considered_trap_locs.csv', index=False)
 
 # Calculate euclidean distances from traps to activity centers
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
@@ -244,7 +246,7 @@ end_date = datetime.now()
 end_time = time.time()
 
 # export the total runtime to a text file
-with open('secr/Forward Greedy/FG57/runtime.txt', 'w') as f:
+with open('secr/Sample Average Approximation/SA1/SA1-2/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -255,13 +257,13 @@ with open('secr/Forward Greedy/FG57/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results
-np.save('./secr/Forward Greedy/FG57/all_selected_traps.npy', selected_traps)
+np.save('./secr/Sample Average Approximation/SA1/SA1-2/all_selected_traps.npy', selected_traps)
 # Save the expected number of detections history as a txt file
-with open('./secr/Forward Greedy/FG57/en_hist.txt', 'w') as f:
+with open('./secr/Sample Average Approximation/SA1/SA1-2/en_hist.txt', 'w') as f:
     for en in en_hist:
         f.write(f"{en}\n")
 # Save the trap_x configuration
-with open('./secr/Forward Greedy/FG57/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Sample Average Approximation/SA1/SA1-2/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 # Print the selected traps
 print("Selected traps:", selected_traps)
@@ -308,9 +310,9 @@ print("Expected number of detections history:", en_hist)
 
 
 
-# Paths
-base_dir = './secr/Forward Greedy/FG57'
-trap_coords_list = pd.read_csv(f'{base_dir}/considered_trap_locs.csv')
+# Pathsx
+base_dir = './secr/Sample Average Approximation/SA1/SA1-2'
+trap_coords_list = pd.read_csv(f'./secr/Sample Average Approximation/SA1/considered_trap_locs.csv')
 selected_traps = np.load(f'{base_dir}/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
 
@@ -344,7 +346,7 @@ for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
     excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
     # Save excluded IDs as TXT
-    excluded_txt_path = f'{base_dir}/FG57-excluded_traps-{n_cams}.txt'
+    excluded_txt_path = f'{base_dir}/SA1-2-excluded_traps-{n_cams}.txt'
     with open(excluded_txt_path, 'w') as f:
         for item in excluded_trap_ids:
             f.write("%s\n" % item)
