@@ -40,7 +40,7 @@ traps_500m <- read.csv("SensorOpt/full_grid_1km/1000m_trap_grid.csv")
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG56-3/FG56-3-excluded_traps-80.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Forward Greedy/FG51/FG51-excluded_traps.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
 
 
@@ -64,12 +64,12 @@ names(traps_df) <- c("trapID", "x", "y")
 
 
 ########################## Make a mask #########################################
-gcs_get_object(
-  "sim_8-14-2025_1kmgrid/param_values_for_each_draw150_7-24-25.csv",
-  bucket = "pgaff_simulations",
-  saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
-  overwrite = TRUE
-)
+# gcs_get_object(
+#   "sim_8-14-2025_1kmgrid/param_values_for_each_draw150_7-24-25.csv",
+#   bucket = "pgaff_simulations",
+#   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
+#   overwrite = TRUE
+# )
 
 # gcs_get_object(
 #   "sim_update_8-1-2025_500mgrid/param_values_for_each_draw150_7-24-25.csv",
@@ -78,12 +78,12 @@ gcs_get_object(
 #   overwrite = TRUE
 # )
 
-# gcs_get_object(
-#   "sim_update_7-30-2025/param_values_for_each_draw150_7-24-25.csv",
-#   bucket = "pgaff_simulations",
-#   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
-#   overwrite = TRUE
-# )
+gcs_get_object(
+  "sim_update_7-30-2025/param_values_for_each_draw150_7-24-25.csv",
+  bucket = "pgaff_simulations",
+  saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
+  overwrite = TRUE
+)
 
 param_vals <- read.csv("param_values_for_each_draw150_7-24-25.csv")
 param_vals <- param_vals[-1]
@@ -124,12 +124,12 @@ summary(covariates(mask1))
 
 
 ############################# load true Ns for comparison #####################
-gcs_get_object(
-  "sim_8-14-2025_1kmgrid/True_N_per_draw.csv",
-  bucket = "pgaff_simulations",
-  saveToDisk = "True_N_per_draw.csv",
-  overwrite = TRUE
-)
+# gcs_get_object(
+#   "sim_8-14-2025_1kmgrid/True_N_per_draw.csv",
+#   bucket = "pgaff_simulations",
+#   saveToDisk = "True_N_per_draw.csv",
+#   overwrite = TRUE
+# )
 
 # gcs_get_object(
 #   "sim_update_8-1-2025_500mgrid/True_N_per_draw.csv",
@@ -138,12 +138,12 @@ gcs_get_object(
 #   overwrite = TRUE
 # )
 
-# gcs_get_object(
-#   "sim_update_7-30-2025/True_N_per_draw.csv",
-#   bucket = "pgaff_simulations",
-#   saveToDisk = "True_N_per_draw.csv",
-#   overwrite = TRUE
-# )
+gcs_get_object(
+  "sim_update_7-30-2025/True_N_per_draw.csv",
+  bucket = "pgaff_simulations",
+  saveToDisk = "True_N_per_draw.csv",
+  overwrite = TRUE
+)
 true_N <- read.csv("True_N_per_draw.csv")
 
 start_draw <- 1
@@ -247,8 +247,9 @@ for (draw in start_draw:end_draw) {
   gc()
   
   # Load detection history
+  ch <- read.csv(paste0("SensorOpt/only_trail_1km/500m/ch/ch_draw_", draw, ".csv"))
   # ch <- read.csv(paste0("SensorOpt/full_grid_500m/8-1 data/ch/ch_draw_", draw, ".csv"))
-  ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
+  # ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
 
   
   # Filter to traps of interest
@@ -348,5 +349,5 @@ for (draw in start_draw:end_draw) {
 }
 
 # Save results
-file_name <- paste0("FG56-3_80traps_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("FG51_80traps_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
