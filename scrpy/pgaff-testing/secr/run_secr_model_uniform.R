@@ -155,7 +155,7 @@
 # # traps12 holds your selected trap points as a plain data frame with columns x and y
 # # Just write it out as CSV to save the trap positions with their coordinates
 # write.csv(traps12 %>% dplyr::select(Trap_index, x, y), 
-#           "U_20A_1km_SelectedTrapCoordinates.csv", 
+#           "U_80A_1km_SelectedTrapCoordinates.csv", 
 #           row.names = FALSE)
 
 
@@ -274,7 +274,7 @@
 #                                           method="Nelder-Mead", 
 #                                           start=list(D=0.0001, g0=0.5, sigma=3000)))
         
-#         saveRDS(fit_model, file=paste("model_U_20A_1km.RDS"))
+#         saveRDS(fit_model, file=paste("model_U_80A_1km.RDS"))
         
 #         out <- data.frame(
 #             Draw=draw,
@@ -324,7 +324,7 @@
 
 
 
-# file_name <- paste0("U_20A_1km_", start_draw, "-", end_draw, ".csv")
+# file_name <- paste0("U_80A_1km_", start_draw, "-", end_draw, ".csv")
 # write.csv(results, file = file_name, row.names = FALSE)
 
 
@@ -361,7 +361,9 @@ plot(SA_proj, add = TRUE, col = "red")
 ################## Load & filter eligible traps ############################
 # traps_500m <- read.csv("SensorOpt/full_grid_500m/500m_trap_grid.csv")
 # traps_500m <- traps_500m[-c(1)]
-traps_500m <- read.csv("SensorOpt/full_grid_1km/1000m_trap_grid.csv")
+# traps_500m <- read.csv("SensorOpt/full_grid_1km/1000m_trap_grid.csv")
+traps_500m <- read.csv("SensorOpt/full_grid_1km/9-5 data/1000m_trap_grid_8-14-25.csv")
+
 traps_500m <- traps_500m[-c(1)]
 
 # traps_to_remove <- read.csv("SensorOpt/secr/traps_to_remove_500m.csv")
@@ -372,7 +374,7 @@ traps_eligible <- traps_500m %>%
     filter(!(Trap_index %in% remove_indices))
 
 ##################### Alternate trap generation ################################
-n_cams <- 20
+n_cams <- 60
 side <- ceiling(sqrt(st_area(SA_proj)))
 grid_cols <- ceiling(sqrt(n_cams))
 new_spacing <- as.numeric(floor(side / grid_cols))
@@ -444,19 +446,29 @@ traps1 <- read.traps(data = traps12, detector = "proximity")
 # traps12 holds your selected trap points as a plain data frame with columns x and y
 # Just write it out as CSV to save the trap positions with their coordinates
 write.csv(traps12 %>% dplyr::select(Trap_index, x, y), 
-          "U_20A_1km_SelectedTrapCoordinates.csv", 
+          "U_60A_1km_SAA_SelectedTrapCoordinates.csv", 
           row.names = FALSE)
 
 ########################## Make a mask #########################################
+# gcs_get_object(
+#   "sim_8-14-2025_1kmgrid/param_values_for_each_draw150_7-24-25.csv",
+#   bucket = "pgaff_simulations",
+#   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
+#   overwrite = TRUE
+# )
+
+# param_vals <- read.csv("param_values_for_each_draw150_7-24-25.csv")
+# param_vals <- param_vals[-c(1)]
+
 gcs_get_object(
-  "sim_8-14-2025_1kmgrid/param_values_for_each_draw150_7-24-25.csv",
+  "sim_9-5-25_1kmgrid_300samps/param_values_for_each_draw300_9-5-25.csv",
   bucket = "pgaff_simulations",
-  saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
+  saveToDisk = "param_values_for_each_draw300_9-5-25.csv",
   overwrite = TRUE
 )
 
-param_vals <- read.csv("param_values_for_each_draw150_7-24-25.csv")
-param_vals <- param_vals[-c(1)]
+param_vals <- read.csv("param_values_for_each_draw300_9-5-25.csv")
+param_vals <- param_vals[-1]
 
 max_sigma <- signif(max(param_vals$sigma), 1)
 SA_buffered <- st_buffer(SA_proj, max_sigma * 2)
@@ -485,17 +497,25 @@ covariates(mask1) <- data.frame(
 summary(covariates(mask1))
 
 ############################# load up a ch #####################################
+# gcs_get_object(
+#   "sim_8-14-2025_1kmgrid/True_N_per_draw.csv",
+#   bucket = "pgaff_simulations",
+#   saveToDisk = "True_N_per_draw.csv",
+#   overwrite = TRUE
+# )
+
+# true_N <- read.csv("True_N_per_draw.csv")
+
 gcs_get_object(
-  "sim_8-14-2025_1kmgrid/True_N_per_draw.csv",
+  "sim_9-5-25_1kmgrid_300samps/True_N_per_draw.csv",
   bucket = "pgaff_simulations",
   saveToDisk = "True_N_per_draw.csv",
   overwrite = TRUE
 )
-
 true_N <- read.csv("True_N_per_draw.csv")
 
-start_draw <- 1
-end_draw <- 150
+start_draw <- 151
+end_draw <- 300
 
 results <- matrix(nrow = 0, ncol = 16)
 for (i in start_draw:end_draw) {
@@ -503,7 +523,9 @@ for (i in start_draw:end_draw) {
     draw <- i
     print(draw)
     
-    ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
+    # ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
+    ch <- read.csv(paste0("SensorOpt/full_grid_1km/9-5 data/ch/ch_draw_", draw, ".csv"))
+
 
     ch2 <- ch %>% filter(trap_id %in% traps12$Trap_index) %>%
         mutate(animal = individual,
@@ -535,7 +557,7 @@ for (i in start_draw:end_draw) {
                                           method = "Nelder-Mead", 
                                           start = list(D = 0.0001, g0 = 0.5, sigma = 3000)))
         
-        saveRDS(fit_model, file = paste("model_U_20A_1km.RDS"))
+        saveRDS(fit_model, file = paste("model_U_60A_1km_SAA.RDS"))
         
         out <- data.frame(
             Draw = draw,
@@ -583,5 +605,5 @@ for (i in start_draw:end_draw) {
     })
 }
 
-file_name <- paste0("U_20A_1km_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("U_60A_1km_SAA_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)

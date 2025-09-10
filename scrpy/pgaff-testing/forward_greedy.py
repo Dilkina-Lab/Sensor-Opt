@@ -160,7 +160,7 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
     pbar.close()
 
     # Save n_tracker to file
-    with open('secr/Sample Average Approximation/SA1/SA1-11/n_tracker.txt', 'w') as f:
+    with open('secr/Sample Average Approximation/SA1/SA1-12/n_tracker.txt', 'w') as f:
         for step, entry in n_tracker.items():
             f.write(f"Step {step}:\n")
             for draw_id, metrics in entry.items():
@@ -184,7 +184,7 @@ params = params.rename(columns={'Unnamed: 0': 'index'})
 # params = params[params['index'].isin(true_n_filtered)]                   # Filter for parameter draws with True N between 30 and 80 
 # params = params.sample(n=5)                                                 # Randomly select 5 draws for testing
 # use these param ids for training
-params_ids =  [71, 53, 16, 70, 8, 87, 28, 81, 21, 3]
+params_ids =  [28, 3, 42, 31, 15, 63, 32, 64, 21, 26]
 
 
 
@@ -254,7 +254,7 @@ end_date = datetime.now()
 end_time = time.time()
 
 # export the total runtime to a text file
-with open('secr/Sample Average Approximation/SA1/SA1-11/runtime.txt', 'w') as f:
+with open('secr/Sample Average Approximation/SA1/SA1-12/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -265,13 +265,13 @@ with open('secr/Sample Average Approximation/SA1/SA1-11/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results
-np.save('./secr/Sample Average Approximation/SA1/SA1-11/all_selected_traps.npy', selected_traps)
+np.save('./secr/Sample Average Approximation/SA1/SA1-12/all_selected_traps.npy', selected_traps)
 # Save the expected number of detections history as a txt file
-with open('./secr/Sample Average Approximation/SA1/SA1-11/en_hist.txt', 'w') as f:
+with open('./secr/Sample Average Approximation/SA1/SA1-12/en_hist.txt', 'w') as f:
     for en in en_hist:
         f.write(f"{en}\n")
 # Save the trap_x configuration
-with open('./secr/Sample Average Approximation/SA1/SA1-11/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Sample Average Approximation/SA1/SA1-12/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 # Print the selected traps
 print("Selected traps:", selected_traps)
@@ -319,7 +319,7 @@ print("Expected number of detections history:", en_hist)
 
 
 # Pathsx
-base_dir = './secr/Sample Average Approximation/SA1/SA1-11'
+base_dir = './secr/Sample Average Approximation/SA1/SA1-12'
 trap_coords_list = pd.read_csv(f'./secr/Sample Average Approximation/SA1/considered_trap_locs.csv')
 selected_traps = np.load(f'{base_dir}/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
@@ -354,7 +354,7 @@ for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
     excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
     # Save excluded IDs as TXT
-    excluded_txt_path = f'{base_dir}/SA1-11-excluded_traps-{n_cams}.txt'
+    excluded_txt_path = f'{base_dir}/SA1-12-excluded_traps-{n_cams}.txt'
     with open(excluded_txt_path, 'w') as f:
         for item in excluded_trap_ids:
             f.write("%s\n" % item)
