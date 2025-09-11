@@ -40,10 +40,8 @@ traps_500m <- read.csv("SensorOpt/full_grid_1km/9-5 data/1000m_trap_grid_8-14-25
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-19/SA1-19-excluded_traps-80.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-5/SA1-5-excluded_traps-80.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-19/SA1-19-excluded_traps-80.txt", col.names = "Trap_index")
-
 
 
 
@@ -148,8 +146,8 @@ gcs_get_object(
 )
 true_N <- read.csv("True_N_per_draw.csv")
 
-start_draw <- 101
-end_draw <- 151
+start_draw <- 151
+end_draw <- 300
 
 results <- matrix(nrow = 0, ncol = 16)
 
@@ -265,5 +263,5 @@ for (draw in start_draw:end_draw) {
 }
 
 # Save results
-file_name <- paste0("SA1-19_80traps_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("SA1-5_80traps_TEST_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
