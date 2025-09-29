@@ -331,7 +331,7 @@ all_trap_ids = set(trap_coords['Trap_index'])
 os.makedirs(base_dir, exist_ok=True)
 
 # Loop over trap counts
-for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
+for n_cams in [10, 20, 30, 40, 50, 60]:
     # Take the first `n_cams` traps
     traps_subset = selected_traps[:n_cams]
 
