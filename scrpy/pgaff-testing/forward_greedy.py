@@ -138,6 +138,7 @@ def forward_greedy_max_en(scenarios, trap_locs, ac_locs, K, distances, draw, dra
 
         trap_x[best_trap] = 1
         selected_traps.append(best_trap)
+        print(f"Selected traps so far: {selected_traps}")
 
         new_avg_en = avg_en_candidates[best_candidate_idx]
         en_hist.append(new_avg_en)

@@ -40,11 +40,7 @@ traps_500m <- read.csv("SensorOpt/full_grid_1km/9-5 data/1000m_trap_grid_8-14-25
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-5/SA1-5-excluded_traps-80.txt", col.names = "Trap_index")
-exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/10traps_1_excluded.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Random/P3/P3-excluded_traps.txt", col.names = "Trap_index")
-
-
+exclude_traps <- read.table("SensorOpt/secr/Greedy Removal/FGR2/FGR2-excluded_traps-10.txt", col.names = "Trap_index")
 
 
 # Filter out excluded traps
@@ -163,8 +159,6 @@ for (draw in start_draw:end_draw) {
   gc()
   
   # Load detection history
-#   ch <- read.csv(paste0("SensorOpt/only_trail_1km/500m/ch/ch_draw_", draw, ".csv"))
-  # ch <- read.csv(paste0("SensorOpt/full_grid_500m/8-1 data/ch/ch_draw_", draw, ".csv"))
   ch <- read.csv(paste0("SensorOpt/full_grid_1km/9-5 data/ch/ch_draw_", draw, ".csv"))
 
   
@@ -265,5 +259,5 @@ for (draw in start_draw:end_draw) {
 }
 
 # Save results
-file_name <- paste0("Random_10traps_1_REAL_TEST_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("FGR2-10traps_", start_draw, "-", end_draw, ".csv")
 write.csv(results, file = file_name, row.names = FALSE)
