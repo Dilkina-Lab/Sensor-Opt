@@ -183,6 +183,7 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tr
     
     remaining_traps = [i for i, x in enumerate(trap_x) if int(x) == 1]
     print(f"Final remaining traps: {remaining_traps}")
+    return remaining_traps, RSE_hist, trap_x
 
 
 
@@ -272,6 +273,8 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tru
 
     selected_traps = [i for i, x in enumerate(trap_x) if int(x) == 1]
     print(f"Final selected traps: {selected_traps}")
+    return selected_traps, RSE_hist, trap_x
+
 
 #################################################################################################################################
 ############                                        READ IN PARAMETERS                                               ############
@@ -315,7 +318,7 @@ for i in range(trap_coords.shape[0]):
     trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
 trap_coords_list = np.array(trap_coords_list)
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv('./secr/Greedy Removal/FGR2/considered_trap_locs.csv', index=False)
+trap_coords_list_df.to_csv('./secr/Greedy Removal/BGR1/considered_trap_locs.csv', index=False)
 
 
 # Calculate euclidean distances from traps to activity centers
@@ -330,15 +333,17 @@ scenarios = list(zip(*[D, g0, sigma, draw]))
 start_date = datetime.now()
 start_time = time.time()
 
+
 #################################################################################################################################
 ############                                         RUN GREEDY FUNCTIONS                                            ############
 #################################################################################################################################
 
 # Backward Greedy
-# backward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN)
+selected_traps, RSE_hist, trap_x = backward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN)
 
 # Forward Greedy
-selected_traps, en_hist, trap_x = forward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN, 68)
+# selected_traps, RSE_hist, trap_x = forward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN, 68)
+
 
 #################################################################################################################################
 ############                                           PROCESS RESULTS                                               ############
@@ -348,7 +353,7 @@ end_date = datetime.now()
 end_time = time.time()
 
 # export the total runtime to a text file
-with open('secr/Greedy Removal/FGR2/runtime.txt', 'w') as f:
+with open('secr/Greedy Removal/BGR1/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -359,29 +364,29 @@ with open('secr/Greedy Removal/FGR2/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results from greedy algorithms
-np.save('./secr/Greedy Removal/FGR2/all_selected_traps.npy', selected_traps)
+np.save('./secr/Greedy Removal/BGR1/all_selected_traps.npy', selected_traps)
 # Save the expected number of detections history as a txt file
-with open('./secr/Greedy Removal/FGR2/en_hist.txt', 'w') as f:
-    for en in en_hist:
-        f.write(f"{en}\n")
+# with open('./secr/Greedy Removal/BGR1/en_hist.txt', 'w') as f:
+#     for en in en_hist:
+#         f.write(f"{en}\n")
 # same RSE history as txt file
-with open('./secr/Greedy Removal/FGR2/rse_hist.txt', 'w') as f:
+with open('./secr/Greedy Removal/BGR1/rse_hist.txt', 'w') as f:
     for rse in RSE_hist:
         f.write(f"{rse}\n")
 # Save the trap_x configuration
-with open('./secr/Greedy Removal/FGR2/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Greedy Removal/BGR1/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 # Print the selected traps
 print("Selected traps:", selected_traps)
 # Print the expected number of detections history
-print("Expected number of detections history:", en_hist)
+# print("Expected number of detections history:", en_hist)
 
 
 #################################################################################################################################
 ############                                      GENERATE FILES FOR SECR                                            ############
 #################################################################################################################################
-base_dir = './secr/Greedy Removal/FGR2'
-trap_coords_list = pd.read_csv(f'./secr/Greedy Removal/FGR2/considered_trap_locs.csv')
+base_dir = './secr/Greedy Removal/BGR1'
+trap_coords_list = pd.read_csv(f'./secr/Greedy Removal/BGR1/considered_trap_locs.csv')
 selected_traps = np.load(f'{base_dir}/all_selected_traps.npy')
 selected_traps = np.array(selected_traps)
 
@@ -413,7 +418,7 @@ for n_cams in [10, 20, 30, 40, 50, 60]:
     excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
     # Save excluded IDs as TXT
-    excluded_txt_path = f'{base_dir}/FGR2-excluded_traps-{n_cams}.txt'
+    excluded_txt_path = f'{base_dir}/BGR1-excluded_traps-{n_cams}.txt'
     with open(excluded_txt_path, 'w') as f:
         for item in excluded_trap_ids:
             f.write("%s\n" % item)
