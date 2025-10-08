@@ -430,7 +430,7 @@ elif algorithm_type == 'backward':
     # You need to have this variable assigned from your run, e.g.:
     # selected_traps, RSE_hist, trap_x, activated_trap_hist, remove_hist = backward_greedy(...)
 
-    for n_cams in [10, 20, 30, 40, 50, 60]:
+    for n_cams in [10, 20, 30, 40, 50, 60, 70]:
         chosen_set = None
         # Find iteration with exactly n_cams traps active
         for trap_set in selected_traps:

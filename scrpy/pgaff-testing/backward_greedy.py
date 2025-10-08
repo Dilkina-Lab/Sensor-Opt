@@ -19,6 +19,10 @@ warnings.filterwarnings("ignore")
 import logging
 logging.getLogger("distributed").setLevel(logging.ERROR)
 
+#################################################################################################################################
+############                                        UTILITY FUNCTIONS                                                ############
+#################################################################################################################################
+
 def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
     """
     Computes expected number of unique individuals detected in a spatial capture-recapture study.
@@ -88,6 +92,11 @@ def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
 true_n = pd.read_csv('./full_grid_1km/True_N_per_draw.csv')
 draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 
+
+#################################################################################################################################
+############                                         GREEDY FUNCTIONS                                                ############
+#################################################################################################################################
+
 def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_trueN):
     trap_x = np.ones((len(trap_loc),))
     D = []
@@ -106,7 +115,7 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tr
         g0.append(scenarios[s][1])
         sigma.append(scenarios[s][2])
 
-        density_prior_file =  f'full_grid_1km/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+        density_prior_file =  f'full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_df = pd.read_csv(density_prior_file)
         density_df['D_mod'] = density_df['D_mod'] * 25
         density_prior.append(density_df['D_mod'].values.tolist())
@@ -203,12 +212,15 @@ def backward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tr
     # pbar.close()
     # return(remove_hist, RSE_hist, activated_trap_hist)
 
+
+#################################################################################################################################
+############                                        READ IN PARAMETERS                                               ############
+#################################################################################################################################
+
 # Read in parameter draws
-params = pd.read_csv('./full_grid_1km/param_values_for_each_draw150.csv')
+params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-# true_n_filtered = true_n[true_n['N'].between(30, 80)]['Parameter_draw'].values.tolist()
-# params = params[params['index'].isin(true_n_filtered)]
-params = params.iloc[:2, :]    # Only keep the first 50 draws for testing
+params = params.iloc[:10, :]    # Only keep the first 10 draws for testing
 
 D = params['D'].values
 g0 = params['g0'].values
@@ -217,12 +229,12 @@ K = 5
 draw = params['index'].values.tolist()
 print(f"Parameter draws evaluated over: {draw}")
 
-ac_coords = pyreadr.read_r('./full_grid_1km/500m_mask.RDS')
+ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
 ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values.tolist()
 ac_coords_list = np.array(ac_coords_list)
 
-trap_coords = pd.read_csv('./full_grid_1km/1000m_trap_grid.csv')
+trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
 # exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_50m.csv')
 exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')
@@ -231,13 +243,8 @@ trap_coords_list = []
 for i in range(trap_coords.shape[0]):
     trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
 trap_coords_list = np.array(trap_coords_list)
-# limit to first 200
-trap_coords_list = trap_coords_list[:200]
 print(f"{trap_coords_list.shape} candidate trap locations")
-
-# np.save('./secr/Backward Greedy/BG12/considered_trap_locs.npy', trap_coords_list)
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-# trap_coords_list_df.to_csv('./secr/Backward Greedy/BG12/considered_trap_locs.csv', index=False)
 
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
 centers = ac_coords_list[np.newaxis, :, :]  # Add a new axis to centers to make it 3D
@@ -249,76 +256,95 @@ scenarios = list(zip(*[D, g0, sigma, draw]))
 start_date = datetime.now()
 start_time = time.time()
 
+#################################################################################################################################
+############                                         RUN GREEDY FUNCTIONS                                            ############
+#################################################################################################################################
+
 backward_greedy(scenarios, trap_coords_list, ac_coords_list, K, distances, draw, draw_to_trueN)
 
-# end_time = time.time()
-# end_date = datetime.now()
+#################################################################################################################################
+############                                           PROCESS RESULTS                                               ############
+#################################################################################################################################
 
-# with open('secr/Backward Greedy/BG12/runtime.txt', 'w') as f:
-#     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
-#     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
-#     f.write(f"Start seconds: {start_time} seconds\n")
-#     f.write(f"End seconds: {end_time} seconds\n")
-#     f.write(f"Total runtime: {end_time - start_time} seconds\n")
-# print(f"Total runtime: {end_time - start_time} seconds")
+# Log the end times after running greedy algorithms
+end_date = datetime.now()
+end_time = time.time()
 
-# # Generate Files for SECR Analysis
-# trap_coords_list = np.load('secr/Backward Greedy/BG12/considered_trap_locs.npy')     # read in the traps considered in the algorithm run
+# export the total runtime to a text file
+with open('secr/Backward Greedy/BGM1/runtime.txt', 'w') as f:
+    # write the start time and date
+    f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    # write the total runtime in seconds
+    f.write(f"Start seconds: {start_time} seconds\n")
+    f.write(f"End seconds: {end_time} seconds\n")
+    f.write(f"Total runtime: {end_time - start_time} seconds\n")
+print(f"Total runtime: {end_time - start_time} seconds")
 
-# with open('secr/Backward Greedy/BG12/activated_trap_hist.txt', 'r') as f:
-#     lines = f.readlines()
+# Save the results from greedy algorithms
+np.save('./secr/Backward Greedy/BGM1/all_selected_traps.npy', selected_traps)
+# Save the expected number of detections history as a txt file
+# with open('./secr/Greedy Removal/FGR2/en_hist.txt', 'w') as f:
+#     for en in en_hist:
+#         f.write(f"{en}\n")
+# same RSE history as txt file
+with open('./secr/Backward Greedy/BGM1/rse_hist.txt', 'w') as f:
+    for rse in RSE_hist:
+        f.write(f"{rse}\n")
+# Save the trap_x configuration
+with open('./secr/Backward Greedy/BGM1/considered_trap_locs.pkl', 'wb') as f:
+    pickle.dump(trap_x, f)
+# Print the selected traps
+print("Selected traps:", selected_traps)
+# Print the expected number of detections history
+# print("Expected number of detections history:", en_hist)
 
-# # Find the first line with exactly 60 elements
-# selected_line = None
-# for line in lines:
-#     # Clean and validate the line
-#     cleaned = line.strip().replace('[', '').replace(']', '').replace(' ', '')
-#     if cleaned:  # Skip empty lines
-#         elements = cleaned.split(',')
-#         if len(elements) == 55:
-#             selected_line = cleaned
-#             break  # Remove this line if you want the LAST occurrence instead
+#################################################################################################################################
+############                                      GENERATE FILES FOR SECR                                            ############
+#################################################################################################################################
 
-# if not selected_line:
-#     raise ValueError("No line with 55 elements found in the file")
+# Generate Files for SECR Analysis
+trap_coords_list = np.load('secr/Backward Greedy/BGM1/considered_trap_locs.npy')     # read in the traps considered in the algorithm rur
+base_dir = './secr/Backward Greedy/BGM1'
+trap_coords_list = pd.read_csv(f'./secr/Backward Greedy/BGM1/considered_trap_locs.csv')
 
-# # convert string to list of integers
-# selected_traps = [int(x) for x in selected_line.split(',')]
+# All trap coordinates (full grid)
+trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
+trap_coords = trap_coords.rename(columns={'X': 'x', 'Y': 'y'})
+trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
+all_trap_ids = set(trap_coords['Trap_index'])
 
-# # # Convert selected_traps to a numpy array and sort it
-# selected_traps = np.array(selected_traps)
-# selected_traps = np.sort(selected_traps)
+# Make sure output directory exists
+os.makedirs(base_dir, exist_ok=True)
 
-# # subset trap_coords_list to include ONLY the selected trap indices
-# trap_coords_list_sub = trap_coords_list[selected_traps]
-# trap_coords_list_sub_df = pd.DataFrame(trap_coords_list_sub, columns=['x', 'y'])
 
-# # get all the potential trap coordinates
-# trap_coords = pd.read_csv('500m_data/500m_trap_grid.csv')
-# trap_coords = trap_coords.rename(columns={'X': 'x', 'Y': 'y'})
-# trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
+for n_cams in [10, 20, 30, 40, 50, 60, 70]:
+    chosen_set = None
+    # Find iteration with exactly n_cams traps active
+    for trap_set in selected_traps:
+        if len(trap_set) == n_cams:
+            chosen_set = trap_set
+            break
+    if chosen_set is None:
+        print(f"No set with exactly {n_cams} traps found, skipping...")
+        continue
 
-# # get the x,y coords and index of the traps that were selected
-# trap_coords_list_sub_df = trap_coords_list_sub_df.merge(trap_coords, on=['x', 'y'], how='left')
-# trap_coords_list_sub_df.to_csv('secr/Backward Greedy/BG12/selected_traps.csv', index=False)
-# trap_coords_list_sub_df
+    traps_subset = chosen_set
 
-# # CORRECTED LOGIC: Find excluded trap IDs using set operations on Trap_index values
-# # Get the Trap_index values for selected traps
-# selected_trap_ids = set(trap_coords_list_sub_df['Trap_index'])
+    trap_coords_list_sub_df = trap_coords_list.iloc[traps_subset].copy()
+    trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df.index + 1  # Match SECR spec
 
-# # Get all Trap_index values from the full grid
-# all_trap_ids = set(trap_coords['Trap_index'])
+    trap_csv_path = f'{base_dir}/selected_traps_{n_cams}.csv'
+    trap_coords_list_sub_df.to_csv(trap_csv_path, index=True)
 
-# # Excluded trap IDs are those in the full grid but NOT in selected_trap_ids
-# excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
+    selected_trap_ids = set(trap_coords_list_sub_df['Trap_index'])
+    excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
-# # convert to txt file
-# with open('secr/Backward Greedy/BG12/BG12-excluded_traps.txt', 'w') as f:
-#     for item in excluded_trap_ids:
-#         f.write("%s\n" % item)
+    excluded_txt_path = f'{base_dir}/BGM1-excluded_traps-{n_cams}.txt'
+    with open(excluded_txt_path, 'w') as f:
+        for item in excluded_trap_ids:
+            f.write("%s\n" % item)
 
-# print(f"Selected {len(selected_traps)} traps")
-# print(f"Excluded {len(excluded_trap_ids)} traps")
-# print(f"Total traps in full grid: {len(all_trap_ids)}")
-# print(f"Verification: {len(selected_trap_ids) + len(excluded_trap_ids)} should equal {len(all_trap_ids)}")
+    print(f"[{n_cams} cams] Selected {len(traps_subset)} traps, "
+            f"Excluded {len(excluded_trap_ids)} traps, "
+            f"Total traps in full grid: {len(all_trap_ids)}")
