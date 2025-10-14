@@ -300,7 +300,7 @@ draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
 # Filter for these 10 params
-params = params[params['index'].isin([47, 77, 93, 94, 148, 187, 197, 227, 234, 296])]
+params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]
 
 D = params['D'].values
 g0 = params['g0'].values
@@ -352,7 +352,7 @@ end_date = datetime.now()
 end_time = time.time()
 
 # export the total runtime to a text file
-with open('secr/Sample Average Approximation/SA2/SA2-18/runtime.txt', 'w') as f:
+with open('secr/Sample Average Approximation/SA2/SA2-20/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -363,17 +363,17 @@ with open('secr/Sample Average Approximation/SA2/SA2-18/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results from greedy algorithms
-np.save('./secr/Sample Average Approximation/SA2/SA2-18/all_selected_traps.npy', selected_traps)
+np.save('./secr/Sample Average Approximation/SA2/SA2-20/all_selected_traps.npy', selected_traps)
 # Save the expected number of detections history as a txt file
 # with open('./secr/Greedy Removal/FGR2/en_hist.txt', 'w') as f:
 #     for en in en_hist:
 #         f.write(f"{en}\n")
 # same RSE history as txt file
-with open('./secr/Sample Average Approximation/SA2/SA2-18/rse_hist.txt', 'w') as f:
+with open('./secr/Sample Average Approximation/SA2/SA2-20/rse_hist.txt', 'w') as f:
     for rse in RSE_hist:
         f.write(f"{rse}\n")
 # Save the trap_x configuration
-with open('./secr/Sample Average Approximation/SA2/SA2-18/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Sample Average Approximation/SA2/SA2-20/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 # Print the selected traps
 print("Selected traps:", selected_traps)
@@ -386,11 +386,11 @@ print("Selected traps:", selected_traps)
 ################################################################################################################################
 
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv(f'./secr/Sample Average Approximation/SA2/SA2-18/considered_trap_locs.csv', index=False)
+trap_coords_list_df.to_csv(f'./secr/Sample Average Approximation/SA2/SA2-20/considered_trap_locs.csv', index=False)
 
 # Generate Files for SECR Analysis
-base_dir = './secr/Sample Average Approximation/SA2/SA2-18'
-# trap_coords_list = pd.read_csv(f'./secr/Sample Average Approximation/SA2/SA2-18/considered_trap_locs.csv')
+base_dir = './secr/Sample Average Approximation/SA2/SA2-20'
+# trap_coords_list = pd.read_csv(f'./secr/Sample Average Approximation/SA2/SA2-20/considered_trap_locs.csv')
 
 # All trap coordinates (full grid)
 trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
@@ -414,7 +414,7 @@ for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
     selected_trap_ids = set(trap_coords_list_sub_df['Trap_index'])
     excluded_trap_ids = sorted(all_trap_ids - selected_trap_ids)
 
-    excluded_txt_path = f'{base_dir}/SA2-18-excluded_traps-{n_cams}.txt'
+    excluded_txt_path = f'{base_dir}/SA2-20-excluded_traps-{n_cams}.txt'
     with open(excluded_txt_path, 'w') as f:
         for item in excluded_trap_ids:
             f.write(f"{item}\n")
