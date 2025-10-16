@@ -1,51 +1,44 @@
-# Load required packages
-list.of.packages <- c(
-  "tidyverse", "lubridate", "googleCloudStorageR",
-  "dplyr", "secrdesign", "sf", "terra", "ggplot2", "lhs"
-)
+######################## Uniform Deployment Baseline with tryCatch #########################
+# Load packages & files
+list.of.packages <- c("tidyverse", "lubridate", "googleCloudStorageR", "dplyr",
+                      "secrdesign", "sf", "terra", "ggplot2", "lhs")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, require, character.only = TRUE)
-rm(list.of.packages); rm(new.packages)
+rm(list.of.packages)
+rm(new.packages)
+# Authenticate GCS
+gcs_auth(json_file = "SensorOpt/secr/pgaff-camera-optim.json", token = NULL, email = NULL)
 
-# GCS authentication
-gcs_auth(
-  json_file = "SensorOpt/secr/pgaff-camera-optim.json",
-  token = NULL,
-  email = NULL
-)
-
-
-######################### Load spatial layers ###############################
+######################### Load in spatial layers ###############################
 TC <- rast("SensorOpt/secr/spatial_data/So_Chilcotin_TC_proj.tif")
 plot(TC)
-
+#CHANGE THIS TO HF_log
 HF <- rast("SensorOpt/secr/spatial_data/So_Chilcotin_HF_proj.tif")
 plot(HF)
-
-HF_log<-log(HF+1)
-
 SA <- st_read("SensorOpt/secr/spatial_data/study_area_2021_GCS.shp")
 SA <- st_set_crs(SA, 4326)
-study_area <- st_transform(SA, crs = st_crs(TC))
-plot(study_area, add = TRUE, col = "red")
+SA_proj <- st_transform(SA, crs = st_crs(TC))
+SA_rect<-st_as_sf(st_as_sfc(st_bbox(SA_proj))) #This gets the rectangular bounding box of the study area
+plot(TC)
+lines(SA_rect, col = "white")
+lines(SA_proj, col = "red")
 
-
-################ Make a traps object by subsetting the 500m grid ################
-# traps_500m <- read.csv("SensorOpt/only_trail_1km/500m/trail_candidate_traps_spacing500.csv")
+################## Load & filter eligible traps ############################
 # traps_500m <- read.csv("SensorOpt/full_grid_500m/500m_trap_grid.csv")
-traps_500m <- read.csv("SensorOpt/full_grid_1km/9-5 data/1000m_trap_grid_8-14-25.csv")
+# traps_500m <- traps_500m[-c(1)]
+# traps_500m <- read.csv("SensorOpt/full_grid_1km/1000m_trap_grid.csv")
+# traps_500m <- read.csv("SensorOpt/full_grid_1km/9-5 data/1000m_trap_grid_8-14-25.csv")
+traps_500m <- read.csv("SensorOpt/full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv")
+traps_500m <- traps_500m[-c(1)]
 
 
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-20/SA1-20-excluded_traps-80.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-1/SA2-1-excluded_traps-80.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-20/SA1-20-excluded_traps-80.txt", col.names = "Trap_index")
-
-
-
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-20/SA1-20-excluded_traps-20.txt", col.names = "Trap_index")
 
 # Filter out excluded traps
 optim_cams <- traps_500m %>% 
@@ -72,198 +65,142 @@ names(traps_df) <- c("trapID", "x", "y")
 #   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
 #   overwrite = TRUE
 # )
-
-# gcs_get_object(
-#   "sim_update_8-1-2025_500mgrid/param_values_for_each_draw150_7-24-25.csv",
-#   bucket = "pgaff_simulations",
-#   saveToDisk = "param_values_for_each_draw150_7-24-25.csv",
-#   overwrite = TRUE
-# )
-
+# param_vals <- read.csv("param_values_for_each_draw150_7-24-25.csv")
+# param_vals <- param_vals[-c(1)]
 gcs_get_object(
-  "sim_9-5-25_1kmgrid_300samps/param_values_for_each_draw300_9-5-25.csv",
-  bucket = "pgaff_simulations",
-  saveToDisk = "param_values_for_each_draw300_9-5-25.csv",
-  overwrite = TRUE
+    "Synthetic_sim/param_values_for_each_draw300_marten.csv",
+    #   "sim_9-5-25_1kmgrid_300samps/param_values_for_each_draw300_9-5-25.csv",
+    bucket = "pgaff_simulations",
+    saveToDisk = "param_values_for_each_draw300_marten.csv",
+    overwrite = TRUE
 )
-
-param_vals <- read.csv("param_values_for_each_draw300_9-5-25.csv")
+param_vals <- read.csv("param_values_for_each_draw300_marten.csv")
 param_vals <- param_vals[-1]
-
-max_sigma <- signif(max(param_vals$sigma), 1) # meters
-SA_buffered <- st_buffer(study_area, max_sigma * 2)
-plot(SA_buffered$geometry)
-plot(study_area$geometry, col = "red", add = TRUE)
-
-# **Important:** Since traps are not passed as an object now, 
-# we need to create a temporary traps object for mask and plotting only:
-# Use in-memory traps object here with traps_df:
-traps_temp <- read.traps(data = traps_df, detector = "proximity")
-
-mask1 <- make.mask(
-  traps = traps_temp,
-  type = "polybuffer",
-  poly = study_area,
-  buffer = max_sigma * 2,
-  spacing = 500
-)
+max_sigma <- signif(max(param_vals$sigma), 1)
+SA_buffered <- st_buffer(SA_rect, max_sigma * 2)
+plot(TC)
+lines(SA_buffered, col="white")
+lines(SA_rect, col = "red")
+mask1<-make.mask(traps=traps12, type="polybuffer",
+                 poly=SA_rect, buffer=max_sigma*2, spacing = 500)
+# mask1 <- make.mask(traps = traps1, types = "polybuffer",
+#                    poly = SA_proj, buffer = max_sigma * 2, spacing = 1000)
 plot(mask1)
-
-coords_mask <- vect(data.frame(x = mask1$x, y = mask1$y), geom = c("x", "y"), crs = crs(study_area))
-
+coords_mask <- vect(data.frame(x = mask1$x, y = mask1$y),
+                    geom = c("x", "y"), crs = crs(SA_rect))
 TC_extract <- extract(TC, coords_mask)
-HF_extract <- extract(HF_log, coords_mask)
-
-# Fill missing values with means
-TC_extract$p047r024_TC_2015[is.na(TC_extract$p047r024_TC_2015)] <- mean(TC_extract$p047r024_TC_2015, na.rm = TRUE)
-HF_extract$`hii_2020-01-01`[is.na(HF_extract$`hii_2020-01-01`)] <- mean(HF_extract$`hii_2020-01-01`, na.rm = TRUE)
-
+HF_extract <- extract(HF, coords_mask)
+TC_extract$p047r024_TC_2015[is.na(TC_extract$p047r024_TC_2015)] <-
+    mean(TC_extract$p047r024_TC_2015, na.rm = TRUE)
+HF_extract$`hii_2020-01-01`[is.na(HF_extract$`hii_2020-01-01`)] <-
+    mean(HF_extract$`hii_2020-01-01`, na.rm = TRUE)
 covariates(mask1) <- data.frame(
-  TC = scale(TC_extract[, 2])[, 1],
-  HF = scale(HF_extract[, 2])[, 1]
+    TC = scale(TC_extract[, 2])[, 1],
+    HF = scale(HF_extract[, 2])[, 1]
 )
 summary(covariates(mask1))
-
-
-############################# load true Ns for comparison #####################
+############################# load up a ch #####################################
 # gcs_get_object(
 #   "sim_8-14-2025_1kmgrid/True_N_per_draw.csv",
 #   bucket = "pgaff_simulations",
 #   saveToDisk = "True_N_per_draw.csv",
 #   overwrite = TRUE
 # )
-
-# gcs_get_object(
-#   "sim_update_8-1-2025_500mgrid/True_N_per_draw.csv",
-#   bucket = "pgaff_simulations",
-#   saveToDisk = "True_N_per_draw.csv",
-#   overwrite = TRUE
-# )
-
+# true_N <- read.csv("True_N_per_draw.csv")
 gcs_get_object(
-  "sim_9-5-25_1kmgrid_300samps/True_N_per_draw.csv",
-  bucket = "pgaff_simulations",
-  saveToDisk = "True_N_per_draw.csv",
-  overwrite = TRUE
+    "Synthetic_sim/Constant_detection/True_N_per_draw.csv",
+    #   "sim_9-5-25_1kmgrid_300samps/True_N_per_draw.csv",
+    bucket = "pgaff_simulations",
+    saveToDisk = "True_N_per_draw.csv",
+    overwrite = TRUE
 )
 true_N <- read.csv("True_N_per_draw.csv")
-
-start_draw <- 101
-end_draw <- 151
-
+# start_draw <- 151
+# end_draw <- 300
+# results <- matrix(nrow = 0, ncol = 16)
+# for (i in start_draw:end_draw) {
+#     gc()
+#     draw <- i
+#     print(draw)
+draw_ids <- c(2, 3, 12, 19, 24, 49, 56, 63, 70, 71, 92, 121, 122, 123, 124, 128, 131, 135, 138, 141, 156, 159, 163, 172, 
+173, 182, 184, 185, 188, 189, 200, 205, 206, 208, 211, 213, 221, 228, 236, 244, 255, 256, 260, 261, 265, 270, 281, 284, 293, 299)
 results <- matrix(nrow = 0, ncol = 16)
+for (draw in draw_ids) {
+    gc()
+    print(draw)
 
-
-##################### Main loop with error handling ###########################
-
-for (draw in start_draw:end_draw) {
-  
-  cat("\n---- Processing draw", draw, "----\n")
-  
-  gc()
-  
-  # Load detection history
-#   ch <- read.csv(paste0("SensorOpt/only_trail_1km/500m/ch/ch_draw_", draw, ".csv"))
-  # ch <- read.csv(paste0("SensorOpt/full_grid_500m/8-1 data/ch/ch_draw_", draw, ".csv"))
-  ch <- read.csv(paste0("SensorOpt/full_grid_1km/9-5 data/ch/ch_draw_", draw, ".csv"))
-
-  
-  # Filter to traps of interest
-  ch2 <- ch %>% 
-    filter(trap_id %in% traps12$Trap_index) %>% 
-    mutate(animal = individual,
-           trap = trap_id,
-           session = 1) %>%
-    select(session, animal, occasion, trap)
-  
-  # Build detections table
-  dets2 <- ch2 %>% 
-    mutate(ID = animal,
-           Detector = trap,
-           Occasion = occasion,
-           Session = paste0("Draw", draw)) %>% 
-    select(Session, ID, Occasion, Detector)
-  
-  # Write files for secr input
-  write.table(dets2, file = "dets2.txt", sep = "\t", row.names = FALSE, quote = FALSE)
-  write.table(traps_df, file = "traps.txt", sep = "\t", row.names = FALSE, quote = FALSE)
-  
-  # Wrap capture history creation + model fitting in tryCatch
-  tryCatch({
-    
-    # Read capture history
-    ch_secr <- read.capthist(
-      captfile = "dets2.txt",
-      trapfile = "traps.txt",
-      skip = 1,
-      detector = "proximity"
-    )
-    
-    # Fit SECR model
-    fit_model <- secr.fit(
-      capthist = ch_secr,
-      mask = mask1,
-      model = list(
-        D ~ TC + HF,
-        g0 ~ 1,
-        sigma ~ 1
-      ),
-      detectfn = "HN",
-      method = "Nelder-Mead",
-      start = list(D = 0.0001, g0 = 0.5, sigma = 3000)
-    )
-    
-    # Extract results normally
-    out <- data.frame(
-      Draw = draw,
-      N_mod = region.N(fit_model)[2, 1],
-      N_true = true_N$N[draw],
-      N_abs_error = abs(region.N(fit_model)[2, 1] - true_N$N[draw]),
-      beta1 = summary(fit_model)$coef[2, 1],
-      beta2 = summary(fit_model)$coef[3, 1],
-      beta1_true = param_vals[draw, "beta1"],
-      beta2_true = param_vals[draw, "beta2"],
-      beta1_abs_error = abs(summary(fit_model)$coef[2, 1] - param_vals[draw, "beta1"]),
-      beta2_abs_error = abs(summary(fit_model)$coef[3, 1] - param_vals[draw, "beta2"]),
-      sigma_mod = summary(fit_model)$predicted[3, 2],
-      sigma_true = param_vals[draw, "sigma"],
-      sigma_abs_error = abs(summary(fit_model)$predicted[3, 2] - param_vals[draw, "sigma"]),
-      g0_mod = summary(fit_model)$predicted[2, 2],
-      g0_true = param_vals[draw, "g0"],
-      g0_abs_error = abs(summary(fit_model)$predicted[2, 2] - param_vals[draw, "g0"])
-    )
-    
-    results <- rbind(results, out)
-    
-  }, error = function(e) {
-    
-    message("❌ Error on draw ", draw, ": ", e$message)
-    
-    # Fill NA values for this draw
-    out <- data.frame(
-      Draw = draw,
-      N_mod = NA,
-      N_true = true_N$N[draw],
-      N_abs_error = NA,
-      beta1 = NA,
-      beta2 = NA,
-      beta1_true = param_vals[draw, "beta1"],
-      beta2_true = param_vals[draw, "beta2"],
-      beta1_abs_error = NA,
-      beta2_abs_error = NA,
-      sigma_mod = NA,
-      sigma_true = param_vals[draw, "sigma"],
-      sigma_abs_error = NA,
-      g0_mod = NA,
-      g0_true = param_vals[draw, "g0"],
-      g0_abs_error = NA
-    )
-    
-    results <- rbind(results, out)
-    
-  })
+    # ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
+    ch <- read.csv(paste0("SensorOpt/full_grid_1km/10-3 data (Marten)/Constant_detection/ch/ch_draw_", draw, ".csv"))
+    ch2 <- ch %>% filter(trap_id %in% traps12$Trap_index) %>%
+        mutate(animal = individual,
+            trap = trap_id,
+            session = 1) %>%
+        select(session, animal, occasion, trap)
+    dets2 <- ch2 %>%
+        mutate(ID = animal,
+            Detector = trap,
+            Occasion = occasion,
+            Session = paste("Draw", draw, sep = "")) %>%
+        select(Session, ID, Occasion, Detector)
+    write.table(dets2, file = "dets2.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+    traps_df <- traps12 %>% mutate(trapID = Trap_index) %>% select(trapID, x, y)
+    write.table(traps_df, file = "traps.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+    tryCatch({
+        ch <- read.capthist(captfile = "dets2.txt",
+                            trapfile = "traps.txt",
+                            detector = "proximity",
+                            skip = 1)
+        system.time(fit_model <- secr.fit(capthist = ch,
+                                        mask = mask1,
+                                        model = list(D ~ TC + HF, g0 ~ 1, sigma ~ 1),
+                                        detectfn = 'HN',
+                                        method = "Nelder-Mead",
+                                        start = list(D = 0.0001, g0 = 0.5, sigma = 3000)))
+        saveRDS(fit_model, file = paste("model_U_80A_1km_SAA2.RDS"))
+        out <- data.frame(
+            Draw = draw,
+            N_mod = region.N(fit_model)[2, 1],
+            N_true = true_N$N[draw],
+            N_abs_error = abs(region.N(fit_model)[2, 1] - true_N$N[draw]),
+            beta1 = summary(fit_model)$coef[2, 1],
+            beta2 = summary(fit_model)$coef[3, 1],
+            beta1_true = param_vals[draw, 'beta1'],
+            beta2_true = param_vals[draw, 'beta2'],
+            beta1_abs_error = abs(summary(fit_model)$coef[2, 1] - param_vals[draw, 'beta1']),
+            beta2_abs_error = abs(summary(fit_model)$coef[3, 1] - param_vals[draw, 'beta2']),
+            sigma_mod = summary(fit_model)$predicted[3, 2],
+            sigma_true = param_vals[draw, 'sigma'],
+            sigma_abs_error = abs(summary(fit_model)$predicted[3, 2] - param_vals[draw, 'sigma']),
+            g0_mod = summary(fit_model)$predicted[2, 2],
+            g0_true = param_vals[draw, 'g0'],
+            g0_abs_error = abs(summary(fit_model)$predicted[2, 2] - param_vals[draw, 'g0'])
+        )
+        results <- rbind(results, out)
+    }, error = function(e) {
+        message(":x: Error on draw ", draw, ": ", e$message)
+        out <- data.frame(
+            Draw = draw,
+            N_mod = NA,
+            N_true = true_N$N[draw],
+            N_abs_error = NA,
+            beta1 = NA,
+            beta2 = NA,
+            beta1_true = param_vals[draw, 'beta1'],
+            beta2_true = param_vals[draw, 'beta2'],
+            beta1_abs_error = NA,
+            beta2_abs_error = NA,
+            sigma_mod = NA,
+            sigma_true = param_vals[draw, 'sigma'],
+            sigma_abs_error = NA,
+            g0_mod = NA,
+            g0_true = param_vals[draw, 'g0'],
+            g0_abs_error = NA
+        )
+        results <- rbind(results, out)
+})
 }
 
-# Save results
-file_name <- paste0("SA1-20_80traps_", start_draw, "-", end_draw, ".csv")
+# file_name <- paste0("U_80A_1km_SAA2_", start_draw, "-", end_draw, ".csv")
+file_name <- paste0("SA2-1-80traps_val.csv")
 write.csv(results, file = file_name, row.names = FALSE)
+
