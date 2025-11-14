@@ -8,6 +8,11 @@ from scipy import stats
 import pyreadr
 import sys
 
+
+#################################################################################################################################
+############                                          UTILITY FUNCTIONS                                              ############
+#################################################################################################################################
+
 def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
     alpha1 = (1/(2*sigma*sigma))
     prob_cap = (g0)*np.exp(-alpha1*(distances**2))  # (#traps, #ac)
@@ -43,40 +48,47 @@ def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
 def compute_expected_r(expected_c, expected_n):
     return expected_c - expected_n
 
-delta = 1e-3
 
-param_draws = [6, 7, 8, 10]  # Extend your draw list as needed
-budgets = [10, 20]
+#################################################################################################################################
+############                                         READ IN PARAMETERS                                              ############
+#################################################################################################################################
+delta = 1            # small constant for E_r constraint, adjust as needed
+param_draws = [6, 7, 8, 9, 10, 11]  # just to test functionality, will extend to all 150 later
+budgets = [10]           # just to test functionality, will extend to all 8 budgets later
+K = 5                        # number of sampling periods
+
 base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten (A)/TESTING"
 
+# Read in activity centers
 ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
 ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values
 
+# Read in candidate trap locations
 trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv').drop(columns = ['Unnamed: 0'])
 trap_coords_list = trap_coords[['x', 'y']].values
 num_traps = len(trap_coords_list)
 
+# Calculate distances between all candidate traps and activity centers
 traps = trap_coords_list[:, np.newaxis, :]
 centers = ac_coords_list[np.newaxis, :, :]
 distances = np.linalg.norm(traps - centers, axis=2)
 
+# Extract information for each parameter draws
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
-results = []
+results = []        # store runtimes, E_n, E_r for each parameter draw
 
 for param_id in param_draws:
     param_row = params.iloc[param_id - 1]
     g0_val = param_row['g0']
     sigma_val = param_row['sigma']
-    K = 5
-    dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
-    if not os.path.exists(dmod_path):
-        print(f"Density file missing for param {param_id}. Skipping.")
-        continue
-    density_df = pd.read_csv(dmod_path)
-    D_vec = density_df['D_mod'].values * 25
 
-    rerun_count_limit = 25
+    # Read in per-pixel densities
+    dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+    density_df = pd.read_csv(dmod_path)
+    D_vec = density_df['D_mod'].values * 25     # scaling * 25 to keep consistent with the greedy approach, not really needed.
+
+    rerun_count_limit = 50        # adjust as needed
     for budget in budgets:
         F = -np.inf
         rerun_count = 0
@@ -84,26 +96,32 @@ for param_id in param_draws:
 
         while True:
             m = gp.Model()
-            x = m.addVars(num_traps, vtype=GRB.BINARY)
+            x = m.addVars(num_traps, vtype=GRB.BINARY)          # add decision variables, x[j] = 1 if trap j is selected, 0 otherwise
 
+            # Compute weights for the linearized surrogate objective function E_n
             alpha1 = 1/(2 * sigma_val**2)
             prob_cap = g0_val * np.exp(-alpha1 * (distances**2))  # shape (num_traps, num_cells)
-            log_prob = np.log(prob_cap + 1e-10)
-            weights = np.dot(-log_prob, D_vec)  # surrogate for objective
+            log_prob = np.log(prob_cap+ 1e-50)
+            weights = np.dot(-log_prob, D_vec)  # linearized surrogate weights for E_n objective
 
+            # Define objective (linearized E_n)
             obj = gp.quicksum(weights[j] * x[j] for j in range(num_traps))
-            m.setObjective(obj, GRB.MAXIMIZE)
-            m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) == budget)
+            m.setObjective(obj, GRB.MINIMIZE)
 
-            # Coefficients for linear E_r expression
-            Pr = prob_cap  # shape [num_traps, num_cells]
-            coeffs = K * np.dot(Pr, D_vec)  # shapes: (num_traps, [l]) x ([l],) -> (num_traps,)
-            er_expr = gp.quicksum(coeffs[j] * x[j] for j in range(num_traps))
-            # If rerunning, add E_r constraint using previous En as constant. NOTE: This is conservative (uses best current solution's En)
+            # Budget constraint
+            m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) == budget, name="budget_constraint")
+
+            # Coefficients for linear E_c expression (already linear)
+            coeffs = K * np.dot(prob_cap, D_vec)  # shapes: (num_traps, [l]) x ([l],) -> (num_traps,)
+            E_c_expr = gp.quicksum(coeffs[j] * x[j] for j in range(num_traps))
+
+            # Linear constraint for minimum recaptures (E_r = E_c - E_n surrogate)
             if rerun_count > 0:
-                m.addConstr(er_expr - En_prev >= F + delta)
+                # Use the linearized surrogate for E_n in the constraint (consistent with objective)
+                E_n_obj_expr = gp.quicksum(weights[j] * x[j] for j in range(num_traps))
+                m.addConstr(E_c_expr - E_n_obj_expr <= F - delta, name = "E_r_constraint")
 
-            # Exclude previous solutions to avoid repeats (if needed)
+            # Exclude previous solutions to avoid repeats
             for prev_sel in exclude_sets:
                 m.addConstr(gp.quicksum((1 - x[j]) if prev_sel[j] else x[j] for j in range(num_traps)) >= 1)
 
@@ -111,62 +129,72 @@ for param_id in param_draws:
             start_time = time.time()
             m.optimize()
             end_time = time.time()
+            
+            if m.status == GRB.OPTIMAL and m.SolCount > 0:
+                selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
+    
 
-            selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
-            trap_selection_array = np.zeros(num_traps)
-            trap_selection_array[selected_idx] = 1
-            exclude_sets.append(trap_selection_array.copy())
+                selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
+                trap_selection_array = np.zeros(num_traps)
+                trap_selection_array[selected_idx] = 1
+                exclude_sets.append(trap_selection_array.copy())
 
-            selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
-            trap_selection_array = np.zeros(num_traps)
-            trap_selection_array[selected_idx] = 1
+                # Save selected/excluded trap IDs per run
+                selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
+                selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
+                all_ids = set(trap_coords['Trap_index'])
+                excluded_ids = sorted(all_ids - set(selected_ids))
+                output_dir = os.path.join(base_dir, f"Param{param_id}_Budget{budget}_Run{rerun_count}")
+                os.makedirs(output_dir, exist_ok=True)
+                selected_csv_path = os.path.join(output_dir, "selected_ids.csv")
+                excluded_txt_path = os.path.join(output_dir, "excluded_ids.txt")
+                selected_df.to_csv(selected_csv_path, index=False)
+                with open(excluded_txt_path, "w") as f:
+                    for eid in excluded_ids:
+                        f.write(f"{eid}\n")
 
-            # Now save selected/excluded trap IDs here:
+                # Compute true expected detections and recaptures for reporting only
+                En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                Er = compute_expected_r(Ec, En)
+                min_metric = "En" if En < Er else "Er"
+                results.append({
+                    "param_id": param_id,
+                    "budget": budget,
+                    "run": rerun_count,
+                    "runtime": round(end_time - start_time, 6),
+                    "E_n": En,
+                    "E_r": Er,
+                    "min_metric": min_metric
+                })
+                print(f"Param {param_id}, budget {budget}, run {rerun_count} -> E_n: {En:.6f}, E_r: {Er:.6f}, min: {min_metric}")
 
-            selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
-            selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
+                if En < Er or rerun_count >= rerun_count_limit:
+                    break
+                else:
+                    F = Er + delta
 
-            all_ids = set(trap_coords['Trap_index'])
-            excluded_ids = sorted(all_ids - set(selected_ids))
+                    rerun_count += 1
+            elif m.status == GRB.INFEASIBLE:
+                m.computeIIS()
+                m.write("model.ilp")
+                print("Infeasible model: IIS written to model.ilp")
+                print("Constraints in IIS:")
+                for c in m.getConstrs():
+                    if c.IISConstr > 0:
+                        print(f"{c.ConstrName}")
 
-            output_dir = os.path.join(base_dir, f"Param{param_id}_Budget{budget}_Run{rerun_count}")
-            os.makedirs(output_dir, exist_ok=True)
+                print("Variables with bounds in IIS:")
+                for v in m.getVars():
+                    if v.IISLB > 0:
+                        print(f"{v.VarName} has infeasible lower bound")
+                    if v.IISUB > 0:
+                        print(f"{v.VarName} has infeasible upper bound")
 
-            selected_csv_path = os.path.join(output_dir, "selected_ids.csv")
-            excluded_txt_path = os.path.join(output_dir, "excluded_ids.txt")
-
-            # Save files
-            selected_df.to_csv(selected_csv_path, index=False)
-
-            with open(excluded_txt_path, "w") as f:
-                for eid in excluded_ids:
-                    f.write(f"{eid}\n")
-
-
-
-
-            # Compute En and Er using the selected configuration
-            En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-            Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-            Er = compute_expected_r(Ec, En)
-            min_metric = "En" if En < Er else "Er"
-            results.append({
-                "param_id": param_id,
-                "budget": budget,
-                "run": rerun_count,
-                "runtime": round(end_time - start_time, 6),
-                "E_n": En,
-                "E_r": Er,
-                "min_metric": min_metric
-            })
-            print(f"Param {param_id}, budget {budget}, run {rerun_count} -> E_n: {En:.6f}, E_r: {Er:.6f}, min: {min_metric}")
-
-            if En < Er or rerun_count >= rerun_count_limit:
                 break
             else:
-                F = Er + delta
-                En_prev = En  # Store value for constraint in rerun
-                rerun_count += 1
+                print(f"Optimization ended with status {m.status}, no solution available.")
+                break
 
 results_df = pd.DataFrame(results)
 results_csv_path = os.path.join(base_dir, "IP_En_Er_Iterations_Summary.csv")
