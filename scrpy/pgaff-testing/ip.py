@@ -50,7 +50,6 @@ def compute_expected_r(expected_c, expected_n):
 #################################################################################################################################
 ############                                         READ IN PARAMETERS                                              ############
 #################################################################################################################################
-
 delta = .001            # small constant for E_r constraint, adjust as needed
 param_draws = [6, 7, 8, 10, 11, 16, 17, 18, 20, 23, 25, 26, 31, 34, 38, 43, 46, 47, 57, 58, 60, 
               61, 64, 67, 68, 69, 73, 74, 76, 77, 78, 79, 80, 83, 85, 91, 93, 94, 98, 102, 105, 109, 110, 112, 
@@ -124,6 +123,7 @@ for param_id in param_draws:
                 E_n_obj_expr = gp.quicksum(weights[j] * x[j] for j in range(num_traps))
                 m.addConstr(E_c_expr - E_n_obj_expr <= F - delta, name = "E_r_constraint")
 
+
             # Exclude previous solutions to avoid repeats
             for prev_sel in exclude_sets:
                 m.addConstr(gp.quicksum((1 - x[j]) if prev_sel[j] else x[j] for j in range(num_traps)) >= 1)
@@ -153,18 +153,18 @@ for param_id in param_draws:
                     "runtime": round(end_time - start_time, 6),
                     "E_n": En,
                     "E_r": Er,
-                    "obj_val": obj_val,
+                    "obj_val": obj_val,   # Store the surrogate objective for each run
                     "min_metric": min_metric
                 })
                 print(f"Param {param_id}, budget {budget}, run {rerun_count} -> E_n: {En:.6f}, E_r: {Er:.6f}, obj_val: {obj_val:.6f}, min: {min_metric}")
 
-                # Save selected/excluded trap files for both cases
+                # Save selected/excluded trap IDs per run, for both rerun_count == 0 (when E_n < E_r) and rerun_count == 1
                 if (rerun_count == 0 and En < Er) or rerun_count == 1:
                     budget_folder = os.path.join(base_dir, f"Budget = {budget}")
                     param_run_folder = os.path.join(budget_folder, f"Param{param_id}_Run{rerun_count}")
                     os.makedirs(param_run_folder, exist_ok=True)
-                    selected_csv_path = os.path.join(param_run_folder, "selected_ids.csv")
-                    excluded_txt_path = os.path.join(param_run_folder, "excluded_ids.txt")
+                    selected_csv_path = os.path.join(param_run_folder, f"IP-selected_ids-run{rerun_count}-budget{budget}-param{param_id}.csv")
+                    excluded_txt_path = os.path.join(param_run_folder, f"IP-excluded_ids-run{rerun_count}-budget{budget}-param{param_id}.txt")
 
                     selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
                     selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
@@ -184,7 +184,6 @@ for param_id in param_draws:
                     continue
                 else:
                     break
-
             elif m.status == GRB.INFEASIBLE:
                 m.computeIIS()
                 m.write("model.ilp")
