@@ -52,8 +52,8 @@ def compute_expected_r(expected_c, expected_n):
 #################################################################################################################################
 ############                                         READ IN PARAMETERS                                              ############
 #################################################################################################################################
-delta = 1            # small constant for E_r constraint, adjust as needed
-param_draws = [6, 7, 8, 9, 10, 11]  # just to test functionality, will extend to all 150 later
+delta = .00001            # small constant for E_r constraint, adjust as needed
+param_draws = [7]  # just to test functionality, will extend to all 150 later
 budgets = [10]           # just to test functionality, will extend to all 8 budgets later
 K = 5                        # number of sampling periods
 
@@ -88,7 +88,7 @@ for param_id in param_draws:
     density_df = pd.read_csv(dmod_path)
     D_vec = density_df['D_mod'].values * 25     # scaling * 25 to keep consistent with the greedy approach, not really needed.
 
-    rerun_count_limit = 50        # adjust as needed
+    rerun_count_limit = 100        # adjust as needed
     for budget in budgets:
         F = -np.inf
         rerun_count = 0
