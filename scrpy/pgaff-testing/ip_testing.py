@@ -110,10 +110,8 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         param_row = params.iloc[param_id - 1]
         g0_val = param_row['g0']
         sigma_val = param_row['sigma']
-        dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
-        density_df = pd.read_csv(dmod_path)
-        D_vec = density_df['D_mod'].values * 25
-        draw_info[param_id] = (g0_val, sigma_val, D_vec)
+        # density no longer needed for the optimization objective
+        draw_info[param_id] = (g0_val, sigma_val)
     
     for budget in budgets:
         F = -np.inf
@@ -124,32 +122,29 @@ for sa_idx, group in enumerate(sa_groups, start=1):
             m = gp.Model()
             x = m.addVars(num_traps, vtype=GRB.BINARY)
             
-            # === SCALARIZED OBJECTIVE: F_λ = (1-λ) E(C) + (2λ-1) E(n) ===
-            lambda_param = 0.6  # must be greater than 0.5 for submodularity
-            
-            # Average across 10 scenarios in group
-            E_c_linear = np.zeros(num_traps)
-            E_n_submod = np.zeros(num_traps)
+            # === NEW OBJECTIVE: minimize average linearized E_n over 10 scenarios ===
+            E_n_coeffs = np.zeros(num_traps)
             
             for param_id in group:
-                g0_val, sigma_val, D_vec = draw_info[param_id]
+                g0_val, sigma_val = draw_info[param_id]
                 alpha1 = 1/(2 * sigma_val**2)
                 prob_cap = g0_val * np.exp(-alpha1 * (distances**2))  # J x L
-                
-                # E(C) = sum_l D_l sum_j x_j p_lj 
-                E_c_linear += np.dot(prob_cap, D_vec)
-                
-                # E(n) marginal approximation
+
+                # For each trap j, accumulate K * log(1 - p_{lj}) aggregated over ACs
+                # This corresponds (up to constants) to:
+                #   E_{n,a_i} = K * sum_j x_j log(1 - Pr[l,j,alpha_i])
                 for j in range(num_traps):
-                    E_n_submod[j] += np.sum(D_vec * prob_cap[j, :])
+                    pj = prob_cap[j, :]  # length = #AC
+                    # ensure probabilities are strictly less than 1
+                    pj_clipped = np.clip(pj, 0.0, 1.0 - 1e-12)
+                    E_n_coeffs[j] += K * np.sum(np.log(1.0 - pj_clipped))
             
-            E_c_linear /= len(group)
-            E_n_submod /= len(group)
+            # Average over the 10 scenarios in this SAA group
+            E_n_coeffs /= len(group)  # len(group) = 10
             
-            # Objective 
-            obj = ((1-lambda_param) * gp.quicksum(E_c_linear[j] * x[j] for j in range(num_traps)) + 
-                   max(0, 2*lambda_param-1) * gp.quicksum(E_n_submod[j] * x[j] for j in range(num_traps)))
-            m.setObjective(obj, GRB.MAXIMIZE)
+            # Objective: minimize average E_n
+            obj = gp.quicksum(E_n_coeffs[j] * x[j] for j in range(num_traps))
+            m.setObjective(obj, GRB.MINIMIZE)
             
             # Budget constraint
             m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) == budget)
@@ -177,10 +172,15 @@ for sa_idx, group in enumerate(sa_groups, start=1):
                 trap_selection_array[selected_idx] = 1
                 # exclude_sets.append(trap_selection_array.copy())
 
-                # Exact 10-scenario evaluation
+                # Exact 10-scenario evaluation (still uses density-based En/Ec if desired)
                 En_list, Er_list = [], []
                 for param_id in group:
-                    g0_val, sigma_val, D_vec = draw_info[param_id]
+                    g0_val, sigma_val = draw_info[param_id]
+                    # no longer using density in opt but needed for evaluation
+                    dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+                    density_df = pd.read_csv(dmod_path)
+                    D_vec = density_df['D_mod'].values * 25
+
                     En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
                     Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
                     Er = compute_expected_r(Ec, En)
@@ -189,7 +189,7 @@ for sa_idx, group in enumerate(sa_groups, start=1):
 
                 En_avg = float(np.mean(En_list))
                 Er_avg = float(np.mean(Er_list))
-                max_metric = "En" if En_avg > Er_avg else "Er"
+                min_metric = "En" if En_avg < Er_avg else "Er"
 
                 results.append({
                     "sa_group": sa_idx,
@@ -200,8 +200,7 @@ for sa_idx, group in enumerate(sa_groups, start=1):
                     "E_n_avg": En_avg,
                     "E_r_avg": Er_avg,
                     "obj_val": m.ObjVal,
-                    "lambda": lambda_param,
-                    "max_metric": max_metric
+                    "min_metric": min_metric
                 })
 
                 # SAVE SELECTED AND UNSELECTED TRAP FILES
@@ -228,21 +227,11 @@ for sa_idx, group in enumerate(sa_groups, start=1):
                     for eid in excluded_ids:
                         f.write(f"{eid}\n")
                 
-                print(f"SA{sa_idx} budget{budget} run{rerun_count} -> En:{En_avg:.6f} Er:{Er_avg:.6f} obj:{m.ObjVal:.6f} max:{max_metric}")
-                
+                print(f"SA{sa_idx} budget{budget} run{rerun_count} -> En:{En_avg:.6f} Er:{Er_avg:.6f} obj:{m.ObjVal:.6f} min:{min_metric}")
                 break
-                # # Rerun logic
-                # if rerun_count == 0 and Er_avg > En_avg:
-                #     # F = Er_avg + delta
-                #     # rerun_count += 1
-                #     continue
-                # else:
-                #     continue
-                #     # break
             else:
                 print(f"SA{sa_idx} budget{budget} run{rerun_count} - NO SOLUTION")
                 break
-
 
 results_df = pd.DataFrame(results)
 results_csv_path = os.path.join(base_dir, "IP_Scalarized_Results_SA_Groups.csv")
