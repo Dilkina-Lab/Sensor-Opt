@@ -52,10 +52,33 @@ def compute_expected_r(expected_c, expected_n):
 #################################################################################################################################
 ############                                         READ IN PARAMETERS                                              ############
 #################################################################################################################################
-delta = .00001            # small constant for E_r constraint, adjust as needed
-param_draws = [7]  # just to test functionality, will extend to all 150 later
-budgets = [10]           # just to test functionality, will extend to all 8 budgets later
-K = 5                        # number of sampling periods
+delta = .001            # small constant for E_r constraint, adjust as needed
+
+sa_groups = [
+    [64, 74, 76, 78, 109, 125, 164, 204, 238, 250],   # SA1
+    [31, 43, 68, 79, 91, 98, 212, 222, 289, 298],     # SA2
+    [112, 114, 115, 125, 158, 176, 183, 225, 283, 287],
+    [16, 25, 38, 60, 80, 145, 225, 234, 238, 275],
+    [38, 57, 68, 85, 94, 105, 130, 193, 197, 282],
+    [7, 10, 34, 47, 78, 91, 165, 193, 204, 282],
+    [57, 67, 69, 74, 112, 125, 145, 197, 230, 231],
+    [6, 26, 31, 77, 94, 120, 164, 197, 219, 222],
+    [8, 18, 20, 69, 115, 166, 174, 180, 194, 238],
+    [11, 83, 158, 197, 212, 216, 222, 239, 257, 287],
+    [6, 64, 69, 98, 112, 153, 166, 195, 204, 296],
+    [10, 57, 58, 60, 130, 148, 176, 187, 193, 231],
+    [18, 57, 61, 78, 105, 130, 183, 227, 233, 287],
+    [10, 23, 69, 91, 94, 102, 145, 197, 219, 222],
+    [17, 58, 79, 91, 145, 227, 231, 238, 257, 289],
+    [18, 34, 69, 114, 174, 176, 181, 195, 197, 282],
+    [17, 57, 149, 193, 222, 230, 231, 233, 287, 298],
+    [47, 77, 93, 94, 148, 187, 197, 227, 234, 296],
+    [7, 77, 80, 98, 109, 204, 225, 238, 257, 287],
+    [34, 68, 80, 93, 105, 155, 197, 219, 282, 298]
+]
+
+budgets = [10, 20, 30, 40, 50, 60, 70, 80]
+K = 5    # number of sampling periods
 
 base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten (A)/TESTING"
 
@@ -76,19 +99,22 @@ distances = np.linalg.norm(traps - centers, axis=2)
 
 # Extract information for each parameter draws
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
-results = []        # store runtimes, E_n, E_r for each parameter draw
+results = []
 
-for param_id in param_draws:
-    param_row = params.iloc[param_id - 1]
-    g0_val = param_row['g0']
-    sigma_val = param_row['sigma']
-
-    # Read in per-pixel densities
-    dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
-    density_df = pd.read_csv(dmod_path)
-    D_vec = density_df['D_mod'].values * 25     # scaling * 25 to keep consistent with the greedy approach, not really needed.
-
-    rerun_count_limit = 100        # adjust as needed
+for sa_idx, group in enumerate(sa_groups, start=1):
+    print(f"Processing SA group {sa_idx} (params: {group})...")
+    
+    # Precompute 10 scenarios per group
+    draw_info = {}
+    for param_id in group:
+        param_row = params.iloc[param_id - 1]
+        g0_val = param_row['g0']
+        sigma_val = param_row['sigma']
+        dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+        density_df = pd.read_csv(dmod_path)
+        D_vec = density_df['D_mod'].values * 25
+        draw_info[param_id] = (g0_val, sigma_val, D_vec)
+    
     for budget in budgets:
         F = -np.inf
         rerun_count = 0
@@ -96,107 +122,129 @@ for param_id in param_draws:
 
         while True:
             m = gp.Model()
-            x = m.addVars(num_traps, vtype=GRB.BINARY)          # add decision variables, x[j] = 1 if trap j is selected, 0 otherwise
-
-            # Compute weights for the linearized surrogate objective function E_n
-            alpha1 = 1/(2 * sigma_val**2)
-            prob_cap = g0_val * np.exp(-alpha1 * (distances**2))  # shape (num_traps, num_cells)
-            log_prob = np.log(prob_cap+ 1e-50)
-            weights = np.dot(-log_prob, D_vec)  # linearized surrogate weights for E_n objective
-
-            # Define objective (linearized E_n)
-            obj = gp.quicksum(weights[j] * x[j] for j in range(num_traps))
-            m.setObjective(obj, GRB.MINIMIZE)
-
+            x = m.addVars(num_traps, vtype=GRB.BINARY)
+            
+            # === SCALARIZED OBJECTIVE: F_λ = (1-λ) E(C) + (2λ-1) E(n) ===
+            lambda_param = 0.6  # must be greater than 0.5 for submodularity
+            
+            # Average across 10 scenarios in group
+            E_c_linear = np.zeros(num_traps)
+            E_n_submod = np.zeros(num_traps)
+            
+            for param_id in group:
+                g0_val, sigma_val, D_vec = draw_info[param_id]
+                alpha1 = 1/(2 * sigma_val**2)
+                prob_cap = g0_val * np.exp(-alpha1 * (distances**2))  # J x L
+                
+                # E(C) = sum_l D_l sum_j x_j p_lj 
+                E_c_linear += np.dot(prob_cap, D_vec)
+                
+                # E(n) marginal approximation
+                for j in range(num_traps):
+                    E_n_submod[j] += np.sum(D_vec * prob_cap[j, :])
+            
+            E_c_linear /= len(group)
+            E_n_submod /= len(group)
+            
+            # Objective 
+            obj = ((1-lambda_param) * gp.quicksum(E_c_linear[j] * x[j] for j in range(num_traps)) + 
+                   max(0, 2*lambda_param-1) * gp.quicksum(E_n_submod[j] * x[j] for j in range(num_traps)))
+            m.setObjective(obj, GRB.MAXIMIZE)
+            
             # Budget constraint
-            m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) == budget, name="budget_constraint")
-
-            # Coefficients for linear E_c expression (already linear)
-            coeffs = K * np.dot(prob_cap, D_vec)  # shapes: (num_traps, [l]) x ([l],) -> (num_traps,)
-            E_c_expr = gp.quicksum(coeffs[j] * x[j] for j in range(num_traps))
-
-            # Linear constraint for minimum recaptures (E_r = E_c - E_n surrogate)
-            if rerun_count > 0:
-                # Use the linearized surrogate for E_n in the constraint (consistent with objective)
-                E_n_obj_expr = gp.quicksum(weights[j] * x[j] for j in range(num_traps))
-                m.addConstr(E_c_expr - E_n_obj_expr <= F - delta, name = "E_r_constraint")
-
-            # Exclude previous solutions to avoid repeats
-            for prev_sel in exclude_sets:
-                m.addConstr(gp.quicksum((1 - x[j]) if prev_sel[j] else x[j] for j in range(num_traps)) >= 1)
-
+            m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) == budget)
+            
+            # # Rerun constraint
+            # if rerun_count > 0:
+            #     m.addConstr(E_r <= F - delta, name="F_constraint")
+            
+            # # Exclusion sets (diversity)
+            # for prev_sel in exclude_sets:
+            #     m.addConstr(gp.quicksum((1 - x[j]) if prev_sel[j] else x[j]
+            #                             for j in range(num_traps)) >= 1)
+            
             m.Params.OutputFlag = 0
+            # m.Params.MIPGap = 0.01
+            # m.Params.TimeLimit = 60
+            
             start_time = time.time()
             m.optimize()
             end_time = time.time()
             
             if m.status == GRB.OPTIMAL and m.SolCount > 0:
                 selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
-    
-
-                selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
                 trap_selection_array = np.zeros(num_traps)
                 trap_selection_array[selected_idx] = 1
-                exclude_sets.append(trap_selection_array.copy())
+                # exclude_sets.append(trap_selection_array.copy())
 
-                # Save selected/excluded trap IDs per run
+                # Exact 10-scenario evaluation
+                En_list, Er_list = [], []
+                for param_id in group:
+                    g0_val, sigma_val, D_vec = draw_info[param_id]
+                    En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                    Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                    Er = compute_expected_r(Ec, En)
+                    En_list.append(En)
+                    Er_list.append(Er)
+
+                En_avg = float(np.mean(En_list))
+                Er_avg = float(np.mean(Er_list))
+                max_metric = "En" if En_avg > Er_avg else "Er"
+
+                results.append({
+                    "sa_group": sa_idx,
+                    "group_ids": str(group),
+                    "budget": budget,
+                    "run": rerun_count,
+                    "runtime": round(end_time - start_time, 6),
+                    "E_n_avg": En_avg,
+                    "E_r_avg": Er_avg,
+                    "obj_val": m.ObjVal,
+                    "lambda": lambda_param,
+                    "max_metric": max_metric
+                })
+
+                # SAVE SELECTED AND UNSELECTED TRAP FILES
+                budget_folder = os.path.join(base_dir, f"Budget = {budget}")
+                group_run_folder = os.path.join(budget_folder, f"SA{sa_idx}_Run{rerun_count}")
+                os.makedirs(group_run_folder, exist_ok=True)
+                
+                selected_csv_path = os.path.join(
+                    group_run_folder,
+                    f"IP-selected_ids-run{rerun_count}-budget{budget}-SA{sa_idx}.csv"
+                )
+                excluded_txt_path = os.path.join(
+                    group_run_folder,
+                    f"IP-excluded_ids-run{rerun_count}-budget{budget}-SA{sa_idx}.txt"
+                )
+
                 selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
                 selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
                 all_ids = set(trap_coords['Trap_index'])
                 excluded_ids = sorted(all_ids - set(selected_ids))
-                output_dir = os.path.join(base_dir, f"Param{param_id}_Budget{budget}_Run{rerun_count}")
-                os.makedirs(output_dir, exist_ok=True)
-                selected_csv_path = os.path.join(output_dir, "selected_ids.csv")
-                excluded_txt_path = os.path.join(output_dir, "excluded_ids.txt")
+
                 selected_df.to_csv(selected_csv_path, index=False)
                 with open(excluded_txt_path, "w") as f:
                     for eid in excluded_ids:
                         f.write(f"{eid}\n")
-
-                # Compute true expected detections and recaptures for reporting only
-                En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-                Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-                Er = compute_expected_r(Ec, En)
-                min_metric = "En" if En < Er else "Er"
-                results.append({
-                    "param_id": param_id,
-                    "budget": budget,
-                    "run": rerun_count,
-                    "runtime": round(end_time - start_time, 6),
-                    "E_n": En,
-                    "E_r": Er,
-                    "min_metric": min_metric
-                })
-                print(f"Param {param_id}, budget {budget}, run {rerun_count} -> E_n: {En:.6f}, E_r: {Er:.6f}, min: {min_metric}")
-
-                if En < Er or rerun_count >= rerun_count_limit:
-                    break
-                else:
-                    F = Er + delta
-
-                    rerun_count += 1
-            elif m.status == GRB.INFEASIBLE:
-                m.computeIIS()
-                m.write("model.ilp")
-                print("Infeasible model: IIS written to model.ilp")
-                print("Constraints in IIS:")
-                for c in m.getConstrs():
-                    if c.IISConstr > 0:
-                        print(f"{c.ConstrName}")
-
-                print("Variables with bounds in IIS:")
-                for v in m.getVars():
-                    if v.IISLB > 0:
-                        print(f"{v.VarName} has infeasible lower bound")
-                    if v.IISUB > 0:
-                        print(f"{v.VarName} has infeasible upper bound")
-
+                
+                print(f"SA{sa_idx} budget{budget} run{rerun_count} -> En:{En_avg:.6f} Er:{Er_avg:.6f} obj:{m.ObjVal:.6f} max:{max_metric}")
+                
                 break
+                # # Rerun logic
+                # if rerun_count == 0 and Er_avg > En_avg:
+                #     # F = Er_avg + delta
+                #     # rerun_count += 1
+                #     continue
+                # else:
+                #     continue
+                #     # break
             else:
-                print(f"Optimization ended with status {m.status}, no solution available.")
+                print(f"SA{sa_idx} budget{budget} run{rerun_count} - NO SOLUTION")
                 break
+
 
 results_df = pd.DataFrame(results)
-results_csv_path = os.path.join(base_dir, "IP_En_Er_Iterations_Summary.csv")
+results_csv_path = os.path.join(base_dir, "IP_Scalarized_Results_SA_Groups.csv")
 results_df.to_csv(results_csv_path, index=False)
 print(f"Results summary saved to {results_csv_path}")
