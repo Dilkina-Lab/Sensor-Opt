@@ -36,7 +36,7 @@ traps_500m <- traps_500m[-c(1)]
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_60/unselected_traps_SA15_excluded.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_80/unselected_traps_SA13_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-16/SA2-16-excluded_traps-80.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-30/SA1-30-excluded_traps-30.txt", col.names = "Trap_index")
@@ -214,8 +214,8 @@ for (draw in draw_ids) {
 }
 
 # file_name <- paste0("U_80A_1km_SAA2_", start_draw, "-", end_draw, ".csv")
-file_name <- paste0("SAA3-SA15-60traps_validation_RSE.csv")
-# file_name <- paste0("SAA3-SA12-40traps_test_Bias.csv")
+file_name <- paste0("SAA3-SA13-80traps_validation_RSE.csv")
+# file_name <- paste0("SAA3-SA7-80traps_test_Bias-RSE_TEMP.csv")
 
 write.csv(results, file = file_name, row.names = FALSE)
 
