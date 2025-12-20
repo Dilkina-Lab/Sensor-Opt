@@ -8,7 +8,6 @@ from scipy import stats
 import pyreadr
 import sys
 
-
 #################################################################################################################################
 ############                                          UTILITY FUNCTIONS                                              ############
 #################################################################################################################################
@@ -52,7 +51,6 @@ def compute_expected_r(expected_c, expected_n):
 #################################################################################################################################
 ############                                         READ IN PARAMETERS                                              ############
 #################################################################################################################################
-delta = .001            # small constant for E_r constraint, adjust as needed
 
 sa_groups = [
     [64, 74, 76, 78, 109, 125, 164, 204, 238, 250],   # SA1
@@ -78,9 +76,9 @@ sa_groups = [
 ]
 
 budgets = [10, 20, 30, 40, 50, 60, 70, 80]
-K = 5    # number of sampling periods
+K = 5
 
-base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten (A)/TESTING"
+base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/TESTING"
 
 # Read in activity centers
 ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
@@ -96,144 +94,168 @@ num_traps = len(trap_coords_list)
 traps = trap_coords_list[:, np.newaxis, :]
 centers = ac_coords_list[np.newaxis, :, :]
 distances = np.linalg.norm(traps - centers, axis=2)
+num_pixels = distances.shape[1]  # L
 
-# Extract information for each parameter draws
+
+#################################################################################################################################
+############                                          FIND J1, J2, Gamma                                             ############
+#################################################################################################################################
+
+# Find the spatially closest traps to each potential activity center(SCENARIO-INDEPENDENT!)
+print("Computing spatial closest traps j1(l), j2(l)")
+j1_l_spatial = np.argmin(distances, axis=0)  # Closest trap by Euclidean distance
+distances_masked = distances.copy()
+distances_masked[j1_l_spatial, np.arange(num_pixels)] = np.inf
+j2_l_spatial = np.argmin(distances_masked, axis=0)  # 2nd closest by distance
+
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
-results = []
+
+# Per-scenario gamma using SPATIAL closest traps (j1_l_spatial, j2_l_spatial)
+scenario_gamma = {}  # sa_idx -> param_id -> gamma_l array (per pixel!)
 
 for sa_idx, group in enumerate(sa_groups, start=1):
-    print(f"Processing SA group {sa_idx} (params: {group})...")
+    print(f"Precomputing per-scenario gamma for SA group {sa_idx}...")
+    scenario_gamma[sa_idx] = {}
     
-    # Precompute 10 scenarios per group
+    for param_id in group:
+        param_row = params.iloc[param_id - 1]
+        g0_val = param_row['g0']
+        sigma_val = param_row['sigma']
+        alpha1 = 1/(2 * sigma_val**2)
+        prob_cap = g0_val * np.exp(-alpha1 * (distances**2))
+        
+        # Use SPATIAL closest traps for gamma computation
+        p1 = prob_cap[j1_l_spatial, np.arange(num_pixels)]
+        p2 = prob_cap[j2_l_spatial, np.arange(num_pixels)]
+        p_both = 1 - (1 - p1) * (1 - p2)
+        gamma_l = p_both - np.maximum(p1, p2)
+        
+        scenario_gamma[sa_idx][param_id] = gamma_l
+
+results = []
+
+# Main optimization loop
+for sa_idx, group in enumerate(sa_groups, start=1):
+    print(f"Processing SA group {sa_idx} (params: {group})")
+    
     draw_info = {}
     for param_id in group:
         param_row = params.iloc[param_id - 1]
         g0_val = param_row['g0']
         sigma_val = param_row['sigma']
-        # density no longer needed for the optimization objective
         draw_info[param_id] = (g0_val, sigma_val)
     
     for budget in budgets:
-        F = -np.inf
         rerun_count = 0
-        exclude_sets = []
 
-        while True:
-            m = gp.Model()
-            x = m.addVars(num_traps, vtype=GRB.BINARY)
+        m = gp.Model()
+        m.ModelName = f"SA{sa_idx}_budget{budget}"
+        x = m.addVars(num_traps, vtype=GRB.BINARY)
+        z = m.addVars(num_pixels, vtype=GRB.BINARY)
+        
+        # Objective: (1/|s|)∑_{s'}∑_l D_l^{s'} (P_{l,j1(l)}^{s'} x_{j1(l)} + P_{l,j2(l)}^{s'} x_{j2(l)} + γ_l^{s'} z_l)
+        # WHERE j1(l), j2(l) = SPATIAL closest traps
+        obj = gp.LinExpr()
+        
+        for param_id in group:
+            g0_val, sigma_val = draw_info[param_id]
+            alpha1 = 1/(2 * sigma_val**2)
+            prob_cap = g0_val * np.exp(-alpha1 * (distances**2))
+            gamma_l = scenario_gamma[sa_idx][param_id]  # s'-specific, per-pixel!
             
-            # === NEW OBJECTIVE: minimize average linearized E_n over 10 scenarios ===
-            E_n_coeffs = np.zeros(num_traps)
+            # Load density for this scenario
+            dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+            density_df = pd.read_csv(dmod_path)
+            D_vec = density_df['D_mod'].values * 25  # L
             
+            obj_s = gp.LinExpr()
+            for l in range(num_pixels):
+                j1 = j1_l_spatial[l]  # SPATIAL closest
+                j2 = j2_l_spatial[l]  # SPATIAL 2nd closest
+                p1 = prob_cap[j1, l]  # P_{l,j1(l)}^{s'}
+                p2 = prob_cap[j2, l]  # P_{l,j2(l)}^{s'}
+                obj_s += D_vec[l] * p1 * x[j1]
+                obj_s += D_vec[l] * p2 * x[j2]
+                obj_s += D_vec[l] * gamma_l[l] * z[l]
+
+            obj.add(obj_s / len(group))
+        
+        m.setObjective(obj, GRB.MAXIMIZE)
+        
+        # Budget constraint
+        m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) <= budget)
+        
+        # z_l constraints using SPATIAL closest traps
+        for l in range(num_pixels):
+            j1 = j1_l_spatial[l]
+            j2 = j2_l_spatial[l]
+            m.addConstr(z[l] <= x[j1], name=f"z_l{l}_upper1")
+            m.addConstr(z[l] <= x[j2], name=f"z_l{l}_upper2")
+            m.addConstr(z[l] >= x[j1] + x[j2] - 1, name=f"z_l{l}_lower")
+        
+        m.Params.OutputFlag = 0
+        start_time = time.time()
+        m.optimize()
+        end_time = time.time()
+        
+        if m.status == GRB.OPTIMAL and m.SolCount > 0:
+            selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
+            trap_selection_array = np.zeros(num_traps)
+            trap_selection_array[selected_idx] = 1
+
+            # Evaluation: per-scenario En, Er (out-of-sample)
+            En_list, Er_list = [], []
             for param_id in group:
                 g0_val, sigma_val = draw_info[param_id]
-                alpha1 = 1/(2 * sigma_val**2)
-                prob_cap = g0_val * np.exp(-alpha1 * (distances**2))  # J x L
+                dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+                density_df = pd.read_csv(dmod_path)
+                D_vec = density_df['D_mod'].values * 25
 
-                # For each trap j, accumulate K * log(1 - p_{lj}) aggregated over ACs
-                # This corresponds (up to constants) to:
-                #   E_{n,a_i} = K * sum_j x_j log(1 - Pr[l,j,alpha_i])
-                for j in range(num_traps):
-                    pj = prob_cap[j, :]  # length = #AC
-                    # ensure probabilities are strictly less than 1
-                    pj_clipped = np.clip(pj, 0.0, 1.0 - 1e-12)
-                    E_n_coeffs[j] += K * np.sum(np.log(1.0 - pj_clipped))
-            
-            # Average over the 10 scenarios in this SAA group
-            E_n_coeffs /= len(group)  # len(group) = 10
-            
-            # Objective: minimize average E_n
-            obj = gp.quicksum(E_n_coeffs[j] * x[j] for j in range(num_traps))
-            m.setObjective(obj, GRB.MINIMIZE)
-            
-            # Budget constraint
-            m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) == budget)
-            
-            # # Rerun constraint
-            # if rerun_count > 0:
-            #     m.addConstr(E_r <= F - delta, name="F_constraint")
-            
-            # # Exclusion sets (diversity)
-            # for prev_sel in exclude_sets:
-            #     m.addConstr(gp.quicksum((1 - x[j]) if prev_sel[j] else x[j]
-            #                             for j in range(num_traps)) >= 1)
-            
-            m.Params.OutputFlag = 0
-            # m.Params.MIPGap = 0.01
-            # m.Params.TimeLimit = 60
-            
-            start_time = time.time()
-            m.optimize()
-            end_time = time.time()
-            
-            if m.status == GRB.OPTIMAL and m.SolCount > 0:
-                selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
-                trap_selection_array = np.zeros(num_traps)
-                trap_selection_array[selected_idx] = 1
-                # exclude_sets.append(trap_selection_array.copy())
+                En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                Er = compute_expected_r(Ec, En)
+                En_list.append(En)
+                Er_list.append(Er)
 
-                # Exact 10-scenario evaluation (still uses density-based En/Ec if desired)
-                En_list, Er_list = [], []
-                for param_id in group:
-                    g0_val, sigma_val = draw_info[param_id]
-                    # no longer using density in opt but needed for evaluation
-                    dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
-                    density_df = pd.read_csv(dmod_path)
-                    D_vec = density_df['D_mod'].values * 25
+            En_avg = float(np.mean(En_list))
+            Er_avg = float(np.mean(Er_list))
+            min_metric = "En" if En_avg < Er_avg else "Er"
 
-                    En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-                    Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-                    Er = compute_expected_r(Ec, En)
-                    En_list.append(En)
-                    Er_list.append(Er)
+            results.append({
+                "sa_group": sa_idx,
+                "group_ids": str(group),
+                "budget": budget,
+                "run": rerun_count,
+                "runtime": round(end_time - start_time, 6),
+                "E_n_avg": En_avg,
+                "E_r_avg": Er_avg,
+                "obj_val": m.ObjVal,
+                "min_metric": min_metric
+            })
 
-                En_avg = float(np.mean(En_list))
-                Er_avg = float(np.mean(Er_list))
-                min_metric = "En" if En_avg < Er_avg else "Er"
+            # Save results
+            budget_folder = os.path.join(base_dir, f"Budget = {budget}")
+            group_run_folder = os.path.join(budget_folder, f"SA{sa_idx}_Run{rerun_count}")
+            os.makedirs(group_run_folder, exist_ok=True)
+            
+            selected_csv_path = os.path.join(group_run_folder, f"IP-selected_ids-run{rerun_count}-budget{budget}-SA{sa_idx}.csv")
+            excluded_txt_path = os.path.join(group_run_folder, f"IP-excluded_ids-run{rerun_count}-budget{budget}-SA{sa_idx}.txt")
 
-                results.append({
-                    "sa_group": sa_idx,
-                    "group_ids": str(group),
-                    "budget": budget,
-                    "run": rerun_count,
-                    "runtime": round(end_time - start_time, 6),
-                    "E_n_avg": En_avg,
-                    "E_r_avg": Er_avg,
-                    "obj_val": m.ObjVal,
-                    "min_metric": min_metric
-                })
+            selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
+            selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
+            all_ids = set(trap_coords['Trap_index'])
+            excluded_ids = sorted(all_ids - set(selected_ids))
 
-                # SAVE SELECTED AND UNSELECTED TRAP FILES
-                budget_folder = os.path.join(base_dir, f"Budget = {budget}")
-                group_run_folder = os.path.join(budget_folder, f"SA{sa_idx}_Run{rerun_count}")
-                os.makedirs(group_run_folder, exist_ok=True)
-                
-                selected_csv_path = os.path.join(
-                    group_run_folder,
-                    f"IP-selected_ids-run{rerun_count}-budget{budget}-SA{sa_idx}.csv"
-                )
-                excluded_txt_path = os.path.join(
-                    group_run_folder,
-                    f"IP-excluded_ids-run{rerun_count}-budget{budget}-SA{sa_idx}.txt"
-                )
-
-                selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
-                selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
-                all_ids = set(trap_coords['Trap_index'])
-                excluded_ids = sorted(all_ids - set(selected_ids))
-
-                selected_df.to_csv(selected_csv_path, index=False)
-                with open(excluded_txt_path, "w") as f:
-                    for eid in excluded_ids:
-                        f.write(f"{eid}\n")
-                
-                print(f"SA{sa_idx} budget{budget} run{rerun_count} -> En:{En_avg:.6f} Er:{Er_avg:.6f} obj:{m.ObjVal:.6f} min:{min_metric}")
-                break
-            else:
-                print(f"SA{sa_idx} budget{budget} run{rerun_count} - NO SOLUTION")
-                break
+            selected_df.to_csv(selected_csv_path, index=False)
+            with open(excluded_txt_path, "w") as f:
+                for eid in excluded_ids:
+                    f.write(f"{eid}\n")
+            
+            print(f"SA{sa_idx} budget{budget} -> En:{En_avg:.6f} Er:{Er_avg:.6f} obj:{m.ObjVal:.6f}")
+        else:
+            print(f"SA{sa_idx} budget{budget} - NO SOLUTION")
 
 results_df = pd.DataFrame(results)
-results_csv_path = os.path.join(base_dir, "IP_Scalarized_Results_SA_Groups.csv")
+results_csv_path = os.path.join(base_dir, "IP_DualCoverage_Results_SA_Groups.csv")
 results_df.to_csv(results_csv_path, index=False)
-print(f"Results summary saved to {results_csv_path}")
+print(f"Results saved to {results_csv_path}")
