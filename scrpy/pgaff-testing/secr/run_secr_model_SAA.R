@@ -36,9 +36,9 @@ traps_500m <- traps_500m[-c(1)]
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_80/unselected_traps_SA20_excluded.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B30_draw1_row64_excluded.txt", col.names = "Trap_index")
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA4/Budget = 10/SA1_Run0/IP-excluded_ids-run0-budget10-SA1.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_70/unselected_traps_SA19_excluded.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B80_draw10_row250_excluded.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA4/Budget = 70/SA1_Run0/IP-excluded_ids-run0-budget10-SA1.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-16/SA2-16-excluded_traps-80.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-30/SA1-30-excluded_traps-30.txt", col.names = "Trap_index")
@@ -177,7 +177,7 @@ for (draw in draw_ids) {
             N_mod = region.N(fit_model)[2, 1],
             N_true = true_N$N[draw],
             N_abs_error = abs(region.N(fit_model)[2, 1] - true_N$N[draw]),
-	beta0 = summary(fit_model)$coef[1, 1],
+	        beta0 = summary(fit_model)$coef[1, 1],
             beta1 = summary(fit_model)$coef[2, 1],
             beta2 = summary(fit_model)$coef[3, 1],
             beta1_true = param_vals[draw, 'beta1'],
@@ -218,9 +218,9 @@ for (draw in draw_ids) {
 }
 
 # file_name <- paste0("U_80A_1km_SAA2_", start_draw, "-", end_draw, ".csv")
-# file_name <- paste0("Genetic-30traps_row64_test_RSE.csv")
-file_name <- paste0("IP-10traps_SA1_test_RSE.csv")
-# file_name <- paste0("SAA3-SA7-80traps_test_Bias-RSE_TEMP.csv")
+file_name <- paste0("Genetic-80traps_row250_test_RSE.csv")
+# file_name <- paste0("IP-10traps_SA1_test_RSE.csv")
+# file_name <- paste0("SAA3-SA19-70traps_test_RSE.csv")
 
 write.csv(results, file = file_name, row.names = FALSE)
 
