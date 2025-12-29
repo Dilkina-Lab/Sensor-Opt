@@ -38,7 +38,7 @@ if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_80/unselected_traps_SA20_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B30_draw1_row64_excluded.txt", col.names = "Trap_index")
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA4/Budget = 30/SA3_Run0/IP-excluded_ids-run0-budget30-SA14.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA4/Budget = 10/SA1_Run0/IP-excluded_ids-run0-budget10-SA1.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-16/SA2-16-excluded_traps-80.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-30/SA1-30-excluded_traps-30.txt", col.names = "Trap_index")
@@ -139,7 +139,7 @@ draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37
    178, 179, 190, 191, 192, 196, 198, 199, 201, 202, 203, 207, 209, 210, 214, 215, 217, 218, 220, 223, 224, 226, 229,
     237, 241, 242, 243, 245, 246, 247, 248, 249, 252, 253, 254, 258, 259, 262, 263, 264, 266, 268, 269, 271, 272, 273,
      274, 276, 277, 278, 280, 285, 286, 288, 291, 292, 294, 295, 297, 300)
-results <- matrix(nrow = 0, ncol = 16)
+results <- matrix(nrow = 0, ncol = 17)
 for (draw in draw_ids) {
     gc()
     print(draw)
@@ -177,6 +177,7 @@ for (draw in draw_ids) {
             N_mod = region.N(fit_model)[2, 1],
             N_true = true_N$N[draw],
             N_abs_error = abs(region.N(fit_model)[2, 1] - true_N$N[draw]),
+	beta0 = summary(fit_model)$coef[1, 1],
             beta1 = summary(fit_model)$coef[2, 1],
             beta2 = summary(fit_model)$coef[3, 1],
             beta1_true = param_vals[draw, 'beta1'],
@@ -198,6 +199,7 @@ for (draw in draw_ids) {
             N_mod = NA,
             N_true = true_N$N[draw],
             N_abs_error = NA,
+            beta0 = NA,
             beta1 = NA,
             beta2 = NA,
             beta1_true = param_vals[draw, 'beta1'],
@@ -217,7 +219,7 @@ for (draw in draw_ids) {
 
 # file_name <- paste0("U_80A_1km_SAA2_", start_draw, "-", end_draw, ".csv")
 # file_name <- paste0("Genetic-30traps_row64_test_RSE.csv")
-file_name <- paste0("IP-30traps_SA14_test_RSE.csv")
+file_name <- paste0("IP-10traps_SA1_test_RSE.csv")
 # file_name <- paste0("SAA3-SA7-80traps_test_Bias-RSE_TEMP.csv")
 
 write.csv(results, file = file_name, row.names = FALSE)
