@@ -55,7 +55,7 @@ mask<-readRDS("500m_mask_marten.RDS")
 mask_covs<-covariates(mask)
 
 ################## Load in the beta outputs from the SECR fit ##################
-betas<-read.csv("SAA3-SA19-70traps_test_RSE_FILTERED.csv")
+betas<-read.csv("SA2-80traps_test_RSE.csv")
 head(betas)
 
 #Filter out any N_abs_error>1000
@@ -141,7 +141,7 @@ mask3<-mask
 mask3$mean_Dhat<-mean_Dhat
 
 #Save locally
-write.csv(mask3, file="mean_predicted_cell_densities.csv")
+write.csv(mask3, file="SA2-70traps-mean_predicted_cell_densities.csv")
 
 #Make a plot and save
 ggplot(mask3,aes(x=x,y=y,fill=mean_Dhat))+
@@ -150,5 +150,5 @@ ggplot(mask3,aes(x=x,y=y,fill=mean_Dhat))+
   coord_equal()+
   theme_void()
 
-ggsave(file="mean_predicted_cell_densities.tiff", bg="white", 
+ggsave(file="SA2-70traps-mean_predicted_cell_densities.tiff", bg="white", 
        height=7, width=10, dpi=600, compression="lzw")
