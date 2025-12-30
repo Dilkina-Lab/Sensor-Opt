@@ -11,7 +11,7 @@ lapply(list.of.packages, require, character.only = TRUE)
 rm(list.of.packages)
 rm(new.packages)
 
-gcs_auth(json_file = "pgaff-camera-optim.json", token = NULL, email = NULL)
+gcs_auth(json_file = "SensorOpt/secr/pgaff-camera-optim.json", token = NULL, email = NULL)
 
 ################ Get the relevant Marten sim data inputs #######################
 gcs_get_object("Synthetic_sim/param_values_for_each_draw300_marten.csv", 
@@ -58,7 +58,14 @@ mask_covs<-covariates(mask)
 betas<-read.csv("SAA3-SA19-70traps_test_RSE_FILTERED.csv")
 head(betas)
 
+#Filter out any N_abs_error>1000
+betas<-betas%>%filter(N_abs_error<=1000)
+hist(betas$N_abs_error)
+
 ################## Use the betas to get cell-specific densities ################
+
+#Storage for mean Dhat from all draws
+all_Dhat<-matrix(NA, nrow=nrow(mask), ncol=nrow(betas))
 
 #Looping through the betas and using them to generate cell-specific density estimates
 for(i in 1:nrow(betas)){
@@ -103,6 +110,9 @@ for(i in 1:nrow(betas)){
   #Save locally
   write.csv(Dout,file=paste("Draw_",draw,"_predicted_density.csv",sep=""))
   
+  #But also store in the matrix for averaging
+  all_Dhat[,i]<-Dhat
+  
   #Quick side-by-side map
   p1<-ggplot(Dout,aes(x=x,y=y,fill=D_mod))+
     geom_tile()+
@@ -122,3 +132,23 @@ for(i in 1:nrow(betas)){
   ggsave(paste("Draw_",draw,"_predicted_density_map.tiff",sep=""), bg="white", 
          height=7, width=10, dpi=600, compression="lzw")
 }
+
+#Get the average predicted cell-density across draws
+mean_Dhat<-rowMeans(all_Dhat, na.rm=TRUE)
+
+#Add to mask for plotting
+mask3<-mask
+mask3$mean_Dhat<-mean_Dhat
+
+#Save locally
+write.csv(mask3, file="mean_predicted_cell_densities.csv")
+
+#Make a plot and save
+ggplot(mask3,aes(x=x,y=y,fill=mean_Dhat))+
+  geom_tile()+
+  scale_fill_viridis_c()+
+  coord_equal()+
+  theme_void()
+
+ggsave(file="mean_predicted_cell_densities.tiff", bg="white", 
+       height=7, width=10, dpi=600, compression="lzw")

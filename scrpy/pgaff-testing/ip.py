@@ -50,6 +50,7 @@ def compute_expected_r(expected_c, expected_n):
 #################################################################################################################################
 ############                                         READ IN PARAMETERS                                              ############
 #################################################################################################################################
+
 delta = .001            # small constant for E_r constraint, adjust as needed
 param_draws = [6, 7, 8, 10, 11, 16, 17, 18, 20, 23, 25, 26, 31, 34, 38, 43, 46, 47, 57, 58, 60, 
               61, 64, 67, 68, 69, 73, 74, 76, 77, 78, 79, 80, 83, 85, 91, 93, 94, 98, 102, 105, 109, 110, 112, 
@@ -85,10 +86,10 @@ for param_id in param_draws:
     g0_val = param_row['g0']
     sigma_val = param_row['sigma']
 
-    # Read in per-pixel densities
-    dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
-    density_df = pd.read_csv(dmod_path)
-    D_vec = density_df['D_mod'].values * 25     # scaling * 25 to keep consistent with the greedy approach, not really needed.
+    # # Read in per-pixel densities
+    # dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+    # density_df = pd.read_csv(dmod_path)
+    # D_vec = density_df['D_mod'].values * 25     # scaling * 25 to keep consistent with the greedy approach, not really needed.
 
     for budget in budgets:
         F = -np.inf
@@ -107,7 +108,7 @@ for param_id in param_draws:
             weights = np.dot(-log_prob, D_vec)  # linearized surrogate weights for E_n objective
 
             # Define objective (linearized E_n)
-            obj = gp.quicksum(weights[j] * x[j] for j in range(num_traps))
+            obj = gp.quicksum((1-weights[j]) * x[j] for j in range(num_traps))
             m.setObjective(obj, GRB.MINIMIZE)
 
             # Budget constraint
