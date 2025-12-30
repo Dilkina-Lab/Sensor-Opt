@@ -55,7 +55,7 @@ mask<-readRDS("500m_mask_marten.RDS")
 mask_covs<-covariates(mask)
 
 ################## Load in the beta outputs from the SECR fit ##################
-betas<-read.csv("SA2-80traps_test_RSE.csv")
+betas<-read.csv("SA2-20-70traps_test_RSE.csv")
 head(betas)
 
 #Filter out any N_abs_error>1000
