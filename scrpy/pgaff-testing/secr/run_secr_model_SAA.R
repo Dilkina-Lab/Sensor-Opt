@@ -37,9 +37,9 @@ traps_500m <- traps_500m[-c(1)]
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_70/unselected_traps_SA19_excluded.txt", col.names = "Trap_index")
-exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B80_draw10_row250_excluded.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B80_draw10_row250_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA4/Budget = 70/SA1_Run0/IP-excluded_ids-run0-budget10-SA1.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-16/SA2-16-excluded_traps-80.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-20/SA2-20-excluded_traps-70.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-30/SA1-30-excluded_traps-30.txt", col.names = "Trap_index")
 
@@ -218,7 +218,8 @@ for (draw in draw_ids) {
 }
 
 # file_name <- paste0("U_80A_1km_SAA2_", start_draw, "-", end_draw, ".csv")
-file_name <- paste0("Genetic-80traps_row250_test_RSE.csv")
+# file_name <- paste0("Genetic-80traps_row250_test_RSE.csv")
+file_name <- paste0("SA2-20-70traps_test_RSE.csv")
 # file_name <- paste0("IP-10traps_SA1_test_RSE.csv")
 # file_name <- paste0("SAA3-SA19-70traps_test_RSE.csv")
 
