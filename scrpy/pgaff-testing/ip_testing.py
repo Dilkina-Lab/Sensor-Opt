@@ -8,32 +8,34 @@ from scipy import stats
 import pyreadr
 import sys
 
+
 #################################################################################################################################
 ############                                          UTILITY FUNCTIONS                                              ############
 #################################################################################################################################
 
-def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
+def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x, j1_l_spatial, j2_l_spatial):
+    """Compute expected unique animals ekn^s = sum_l ekn^s_l using IP formulas"""
     alpha1 = (1/(2*sigma*sigma))
     prob_cap = (g0)*np.exp(-alpha1*(distances**2))  # (#traps, #ac)
+    
+    # Mask inactive traps
     for t in range(len(trap_locs)):
         if int(trap_x[t]) == 0:
             prob_cap[t, ...] = np.zeros(ac_locs.shape[0])
-    i_cap_hist = np.zeros(len(trap_locs))
-    p_empty_cap_hist = compute_cond_lik_ind(len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist)
-    p_nonempty = 1 - p_empty_cap_hist
-    expected_n = np.sum(p_nonempty*density)
-    return expected_n
+    
+    # Compute Q^s_l,j1 = 1 - (1 - P^s_l,j1)^K for closest traps only
+    Q1 = 1 - (1 - prob_cap[j1_l_spatial, np.arange(len(density))])**K
+    Q2 = 1 - (1 - prob_cap[j2_l_spatial, np.arange(len(density))])**K
+    
+    # ekn^s_l = D^s_l (Q1 x_j1 + Q2 x_j2 - Q1 Q2 z_l) using spatial closest traps
+    z_l = np.minimum(trap_x[j1_l_spatial], trap_x[j2_l_spatial])  # both active
+    ekn_l = density * (Q1 * trap_x[j1_l_spatial] + Q2 * trap_x[j2_l_spatial] - Q1 * Q2 * z_l)
+    
+    return np.sum(ekn_l)
 
-def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
-    broadcast_i_cap_hist = np.broadcast_to(ind_cap_hist[:, np.newaxis], (num_traps, num_activity_centers))
-    probs = stats.binom.pmf(broadcast_i_cap_hist, K, est_prob_cap)
-    zero_mask = probs == 0.0
-    log_probs = np.log(probs, where=np.invert(zero_mask))
-    log_probs[zero_mask] = -sys.maxsize - 1
-    log_cond_lik_sums = np.sum(log_probs, axis=0)
-    return np.exp(log_cond_lik_sums)
 
 def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
+    """Expected total captures ec^s_l (unchanged from original)"""
     alpha1 = (1/(2*sigma*sigma))
     prob_cap = g0*np.exp(-alpha1*(distances**2))
     density_array = np.array(density).flatten()
@@ -44,7 +46,9 @@ def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
     expected_c = np.sum(prob_cap*broadcast_density)*K
     return expected_c
 
+
 def compute_expected_r(expected_c, expected_n):
+    """Expected recaptures: er^s = ec^s - en^s (from IP)"""
     return expected_c - expected_n
 
 
@@ -78,7 +82,7 @@ sa_groups = [
 budgets = [10, 20, 30, 40, 50, 60, 70, 80]
 K = 5
 
-base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/TESTING"
+base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/Jan7_TESTING"
 
 # Read in activity centers
 ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
@@ -110,9 +114,8 @@ j2_l_spatial = np.argmin(distances_masked, axis=0)  # 2nd closest by distance
 
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
 
-# Per-scenario gamma using SPATIAL closest traps (j1_l_spatial, j2_l_spatial)
+# Precompute per-scenario gamma coefficients using SPATIAL closest traps
 scenario_gamma = {}  # sa_idx -> param_id -> gamma_l array (per pixel!)
-
 for sa_idx, group in enumerate(sa_groups, start=1):
     print(f"Precomputing per-scenario gamma for SA group {sa_idx}...")
     scenario_gamma[sa_idx] = {}
@@ -124,9 +127,12 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         alpha1 = 1/(2 * sigma_val**2)
         prob_cap = g0_val * np.exp(-alpha1 * (distances**2))
         
-        # Use SPATIAL closest traps for gamma computation
+        # P^s_l,j1, P^s_l,j2 using SPATIAL closest traps
         p1 = prob_cap[j1_l_spatial, np.arange(num_pixels)]
         p2 = prob_cap[j2_l_spatial, np.arange(num_pixels)]
+        
+        # gamma^s_l,3 = marginal contribution when BOTH traps active
+        # = P(both) - max(P1, P2) where P(both) = 1 - (1-P1)(1-P2)
         p_both = 1 - (1 - p1) * (1 - p2)
         gamma_l = p_both - np.maximum(p1, p2)
         
@@ -152,46 +158,60 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         m.ModelName = f"SA{sa_idx}_budget{budget}"
         x = m.addVars(num_traps, vtype=GRB.BINARY)
         z = m.addVars(num_pixels, vtype=GRB.BINARY)
+        Ekmin = m.addVars(len(group), vtype=GRB.CONTINUOUS, lb=0)  # Emin^s constraints
         
-        # Objective: (1/|s|)∑_{s'}∑_l D_l^{s'} (P_{l,j1(l)}^{s'} x_{j1(l)} + P_{l,j2(l)}^{s'} x_{j2(l)} + γ_l^{s'} z_l)
-        # WHERE j1(l), j2(l) = SPATIAL closest traps
+        # Objective: max (1/|g|)∑_{s∈g} Emin^s  [IP objective]
         obj = gp.LinExpr()
-        
-        for param_id in group:
-            g0_val, sigma_val = draw_info[param_id]
-            alpha1 = 1/(2 * sigma_val**2)
-            prob_cap = g0_val * np.exp(-alpha1 * (distances**2))
-            gamma_l = scenario_gamma[sa_idx][param_id]  # s'-specific, per-pixel!
-            
-            # Load density for this scenario
-            dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
-            density_df = pd.read_csv(dmod_path)
-            D_vec = density_df['D_mod'].values * 25  # L
-            
-            obj_s = gp.LinExpr()
-            for l in range(num_pixels):
-                j1 = j1_l_spatial[l]  # SPATIAL closest
-                j2 = j2_l_spatial[l]  # SPATIAL 2nd closest
-                p1 = prob_cap[j1, l]  # P_{l,j1(l)}^{s'}
-                p2 = prob_cap[j2, l]  # P_{l,j2(l)}^{s'}
-                obj_s += D_vec[l] * p1 * x[j1]
-                obj_s += D_vec[l] * p2 * x[j2]
-                obj_s += D_vec[l] * gamma_l[l] * z[l]
-
-            obj.add(obj_s / len(group))
-        
-        m.setObjective(obj, GRB.MAXIMIZE)
+        for s_idx, param_id in enumerate(group):
+            obj += Ekmin[s_idx]
+        m.setObjective(obj / len(group), GRB.MAXIMIZE)          # len of group should be 10 in our case
         
         # Budget constraint
         m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) <= budget)
         
-        # z_l constraints using SPATIAL closest traps
+        # z_l linearization constraints using SPATIAL closest traps (IP constraints)
         for l in range(num_pixels):
             j1 = j1_l_spatial[l]
             j2 = j2_l_spatial[l]
             m.addConstr(z[l] <= x[j1], name=f"z_l{l}_upper1")
             m.addConstr(z[l] <= x[j2], name=f"z_l{l}_upper2")
             m.addConstr(z[l] >= x[j1] + x[j2] - 1, name=f"z_l{l}_lower")
+        
+        # ekn^s_l and ekr^s_l constraints for each scenario s in group (IP definitions)
+        for s_idx, param_id in enumerate(group):
+            g0_val, sigma_val = draw_info[param_id]
+            alpha1 = 1/(2 * sigma_val**2)
+            prob_cap = g0_val * np.exp(-alpha1 * (distances**2))
+            
+            # Load density D^s_l for this scenario
+            dmod_path = f'./full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{param_id}.csv'
+            density_df = pd.read_csv(dmod_path)
+            D_vec = density_df['D_mod'].values * 25  # Scenario-specific densities
+            
+            # ekn^s_l constraint: Ekmin^s <= sum_l ekn^s_l
+            ekn_sum = gp.LinExpr()
+            for l in range(num_pixels):
+                j1 = j1_l_spatial[l]
+                j2 = j2_l_spatial[l]
+                Q1 = 1 - (1 - prob_cap[j1, l])**K  # Q^s_l,j1
+                Q2 = 1 - (1 - prob_cap[j2, l])**K  # Q^s_l,j2
+                ekn_l = D_vec[l] * (Q1 * x[j1] + Q2 * x[j2] - Q1 * Q2 * z[l])
+                ekn_sum += ekn_l
+            
+            m.addConstr(Ekmin[s_idx] <= ekn_sum, name=f"Ekn_min{s_idx}")
+            
+            # ekr^s_l constraint: Ekmin^s <= sum_l ekr^s_l using precomputed gamma
+            gamma_l = scenario_gamma[sa_idx][param_id]  # γ^s_l,3 from precomputation
+            ekr_sum = gp.LinExpr()
+            for l in range(num_pixels):
+                j1 = j1_l_spatial[l]
+                j2 = j2_l_spatial[l]
+                p1 = prob_cap[j1, l]  # γ^s_l,1 = P^s_l,j1
+                p2 = prob_cap[j2, l]  # γ^s_l,2 = P^s_l,j2
+                ekr_l = D_vec[l] * (p1 * x[j1] + p2 * x[j2] + gamma_l[l] * z[l]) * K
+                ekr_sum += ekr_l
+            
+            m.addConstr(Ekmin[s_idx] <= ekr_sum, name=f"Ekr_min{s_idx}")
         
         m.Params.OutputFlag = 0
         start_time = time.time()
@@ -203,7 +223,7 @@ for sa_idx, group in enumerate(sa_groups, start=1):
             trap_selection_array = np.zeros(num_traps)
             trap_selection_array[selected_idx] = 1
 
-            # Evaluation: per-scenario En, Er (out-of-sample)
+            # Post-optimization evaluation using UPDATED utility functions (IP formulas)
             En_list, Er_list = [], []
             for param_id in group:
                 g0_val, sigma_val = draw_info[param_id]
@@ -211,8 +231,11 @@ for sa_idx, group in enumerate(sa_groups, start=1):
                 density_df = pd.read_csv(dmod_path)
                 D_vec = density_df['D_mod'].values * 25
 
-                En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
-                Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, distances, trap_selection_array)
+                # Use NEW IP-consistent compute_expected_n
+                En = compute_expected_n(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, 
+                                      distances, trap_selection_array, j1_l_spatial, j2_l_spatial)
+                Ec = compute_expected_c(ac_coords_list, trap_coords_list, g0_val, sigma_val, K, D_vec, 
+                                      distances, trap_selection_array)
                 Er = compute_expected_r(Ec, En)
                 En_list.append(En)
                 Er_list.append(Er)
@@ -233,7 +256,7 @@ for sa_idx, group in enumerate(sa_groups, start=1):
                 "min_metric": min_metric
             })
 
-            # Save results
+            # Save results (UNCHANGED)
             budget_folder = os.path.join(base_dir, f"Budget = {budget}")
             group_run_folder = os.path.join(budget_folder, f"SA{sa_idx}_Run{rerun_count}")
             os.makedirs(group_run_folder, exist_ok=True)
@@ -254,6 +277,7 @@ for sa_idx, group in enumerate(sa_groups, start=1):
             print(f"SA{sa_idx} budget{budget} -> En:{En_avg:.6f} Er:{Er_avg:.6f} obj:{m.ObjVal:.6f}")
         else:
             print(f"SA{sa_idx} budget{budget} - NO SOLUTION")
+
 
 results_df = pd.DataFrame(results)
 results_csv_path = os.path.join(base_dir, "IP_DualCoverage_Results_SA_Groups.csv")
