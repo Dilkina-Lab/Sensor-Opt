@@ -36,12 +36,12 @@ traps_500m <- traps_500m[-c(1)]
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA3/Budget_70/unselected_traps_SA19_excluded.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA5/Budget_70/unselected_traps_SA5_excluded.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B80_draw10_row250_excluded.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA4/Budget = 70/SA1_Run0/IP-excluded_ids-run0-budget10-SA1.txt", col.names = "Trap_index")
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA2/SA2-20/SA2-20-excluded_traps-70.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA5/Budget = 30/SA10_Run0/IP-excluded_ids-run0-budget30-SA10.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA5/SA5-20/SA5-20-excluded_traps-70.txt", col.names = "Trap_index")
 # exclude_traps <- read.table("SensorOpt/secr/Random/full_grid_1km/80traps_10_excluded.txt", col.names = "Trap_index")
-# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA1/SA1-30/SA1-30-excluded_traps-30.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SA5/SA5-30/SA5-30-excluded_traps-30.txt", col.names = "Trap_index")
 
 # Filter out excluded traps
 optim_cams <- traps_500m %>% 
@@ -127,18 +127,18 @@ true_N <- read.csv("True_N_per_draw.csv")
 #     print(draw)
 
 #### VALIDATION PARAMETERS
-# draw_ids <- c(2, 3, 12, 19, 24, 49, 56, 63, 70, 71, 92, 121, 122, 123, 124, 128, 131, 135, 138, 141,
-#  156, 159, 163, 172, 173, 182, 184, 185, 188, 189, 200, 205, 206, 208, 211, 213, 221, 228, 236, 244, 
-#  255, 256, 260, 261, 265, 270, 281, 284, 293, 299)
+draw_ids <- c(2, 3, 12, 19, 24, 49, 56, 63, 70, 71, 92, 121, 122, 123, 124, 128, 131, 135, 138, 141,
+ 156, 159, 163, 172, 173, 182, 184, 185, 188, 189, 200, 205, 206, 208, 211, 213, 221, 228, 236, 244, 
+ 255, 256, 260, 261, 265, 270, 281, 284, 293, 299)
 
 # ### TEST PARAMETERS
-draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37, 39, 40, 41,
- 42, 44, 45, 48, 50, 51, 52, 53, 54, 55, 59, 62, 65, 66, 72, 75, 81, 82, 84, 86, 87, 88, 89, 90, 95, 
- 96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 111, 113, 116, 117, 118, 126, 129, 132, 133, 134, 136, 137,
-  139, 140, 142, 143, 144, 146, 147, 150, 151, 152, 154, 157, 160, 161, 162, 167, 168, 169, 170, 171, 175, 177,
-   178, 179, 190, 191, 192, 196, 198, 199, 201, 202, 203, 207, 209, 210, 214, 215, 217, 218, 220, 223, 224, 226, 229,
-    237, 241, 242, 243, 245, 246, 247, 248, 249, 252, 253, 254, 258, 259, 262, 263, 264, 266, 268, 269, 271, 272, 273,
-     274, 276, 277, 278, 280, 285, 286, 288, 291, 292, 294, 295, 297, 300)
+# draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37, 39, 40, 41,
+#  42, 44, 45, 48, 50, 51, 52, 53, 54, 55, 59, 62, 65, 66, 72, 75, 81, 82, 84, 86, 87, 88, 89, 90, 95, 
+#  96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 111, 113, 116, 117, 118, 126, 129, 132, 133, 134, 136, 137,
+#   139, 140, 142, 143, 144, 146, 147, 150, 151, 152, 154, 157, 160, 161, 162, 167, 168, 169, 170, 171, 175, 177,
+#    178, 179, 190, 191, 192, 196, 198, 199, 201, 202, 203, 207, 209, 210, 214, 215, 217, 218, 220, 223, 224, 226, 229,
+#     237, 241, 242, 243, 245, 246, 247, 248, 249, 252, 253, 254, 258, 259, 262, 263, 264, 266, 268, 269, 271, 272, 273,
+#      274, 276, 277, 278, 280, 285, 286, 288, 291, 292, 294, 295, 297, 300)
 results <- matrix(nrow = 0, ncol = 17)
 for (draw in draw_ids) {
     gc()
@@ -219,9 +219,9 @@ for (draw in draw_ids) {
 
 # file_name <- paste0("U_80A_1km_SAA2_", start_draw, "-", end_draw, ".csv")
 # file_name <- paste0("Genetic-80traps_row250_test_RSE.csv")
-file_name <- paste0("SA2-20-70traps_test_RSE.csv")
-# file_name <- paste0("IP-10traps_SA1_test_RSE.csv")
-# file_name <- paste0("SAA3-SA19-70traps_test_RSE.csv")
+# file_name <- paste0("SA5-20-70traps_test_RSE.csv")
+file_name <- paste0("IP2-30traps_SA10_val_RSE.csv")
+# file_name <- paste0("SAA3-SA5-70traps_test_RSE.csv")
 
 write.csv(results, file = file_name, row.names = FALSE)
 
