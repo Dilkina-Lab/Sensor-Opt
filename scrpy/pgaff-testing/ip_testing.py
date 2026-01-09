@@ -288,9 +288,7 @@ for sa_idx, group in enumerate(sa_groups, start=1):
 
             # Save results
             budget_folder = os.path.join(base_dir, f"Budget = {budget}")
-            os.makedirs(budget_folder, exist_ok=True)   # <-- add this line
-            # group_run_folder = os.path.join(budget_folder, f"SA{sa_idx}_Run{rerun_count}")
-            # os.makedirs(group_run_folder, exist_ok=True)
+            os.makedirs(budget_folder, exist_ok=True)
 
             selected_csv_path = os.path.join(budget_folder, f"IP-selected_ids-budget{budget}-SA{sa_idx}.csv")
             excluded_txt_path = os.path.join(budget_folder, f"IP-excluded_ids-budget{budget}-SA{sa_idx}.txt")
