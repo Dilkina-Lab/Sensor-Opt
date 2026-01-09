@@ -33,8 +33,7 @@ def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
     return np.sum(ekn_l)
 
 
-def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x,
-                       j1_l_spatial, j2_l_spatial):
+def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x, j1_l_spatial, j2_l_spatial):
     """
     Expected total captures ec^s = sum_l ekc_l^s, with
 
