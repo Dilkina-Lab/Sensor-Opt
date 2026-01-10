@@ -13,23 +13,31 @@ import sys
 ############                                          UTILITY FUNCTIONS                                              ############
 #################################################################################################################################
 
-def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x, j1_l_spatial, j2_l_spatial, j3_l_spatial):
-    """
-    En^s = sum_l ekn_l^s using 3 closest traps
 
-    ekn_l^s = D_l^s ( Q1 x1 + Q2 x2 + Q3 x3
-                        - Q1 Q2 z12 - Q1 Q3 z13 - Q2 Q3 z23
-                        + Q1 Q2 Q3 y )
+def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances,
+                       trap_x, j1_l_spatial, j2_l_spatial, j3_l_spatial, j4_l_spatial):
+    """
+    En^s = sum_l ekn_l^s using 4 closest traps
+
+    ekn_l^s = D_l^s ( Q1 x1 + Q2 x2 + Q3 x3 + Q4 x4
+                      - Q1 Q2 z12 - Q1 Q3 z13 - Q1 Q4 z14
+                      - Q2 Q3 z23 - Q2 Q4 z24 - Q3 Q4 z34
+                      + Q1 Q2 Q3 t123 + Q1 Q2 Q4 t124
+                      + Q1 Q3 Q4 t134 + Q2 Q3 Q4 t234
+                      - Q1 Q2 Q3 Q4 y )
     where:
-        Qk = 1 - (1 - Pk)^K 
-        z12 = x1 AND x2, z13 = x1 AND x3, z23 = x2 AND x3, y = x1 AND x2 AND x3
+        Qk = 1 - (1 - Pk)^K
+        z_ab = x_a AND x_b
+        t_abc = x_a AND x_b AND x_c
+        y = x1 AND x2 AND x3 AND x4
     """
     alpha1 = 1.0 / (2.0 * sigma * sigma)
     prob_cap = g0 * np.exp(-alpha1 * (distances ** 2))  # (J, L)
 
+    # zero out inactive traps
     for t in range(len(trap_locs)):
         if int(trap_x[t]) == 0:
-            prob_cap[t, ...] = 0.0   # Inactive traps have a probability of capture = 0
+            prob_cap[t, ...] = 0.0
 
     L = prob_cap.shape[1]
     D_vec = np.array(density).flatten()
@@ -39,36 +47,60 @@ def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
         j1 = j1_l_spatial[l]
         j2 = j2_l_spatial[l]
         j3 = j3_l_spatial[l]
+        j4 = j4_l_spatial[l]          # CHANGED for 4 traps
 
         P1 = prob_cap[j1, l]
         P2 = prob_cap[j2, l]
         P3 = prob_cap[j3, l]
+        P4 = prob_cap[j4, l]          # CHANGED for 4 traps
 
         Q1 = 1.0 - (1.0 - P1) ** K
         Q2 = 1.0 - (1.0 - P2) ** K
         Q3 = 1.0 - (1.0 - P3) ** K
+        Q4 = 1.0 - (1.0 - P4) ** K    # CHANGED for 4 traps
 
         x1 = trap_x[j1]
         x2 = trap_x[j2]
         x3 = trap_x[j3]
+        x4 = trap_x[j4]               # CHANGED for 4 traps
 
+        # pairwise ANDs
         z12 = min(x1, x2)
         z13 = min(x1, x3)
+        z14 = min(x1, x4)             # CHANGED for 4 traps
         z23 = min(x2, x3)
-        y   = min(x1, x2, x3)
+        z24 = min(x2, x4)             # CHANGED for 4 traps
+        z34 = min(x3, x4)             # CHANGED for 4 traps
+
+        # triple ANDs
+        t123 = min(x1, x2, x3)
+        t124 = min(x1, x2, x4)
+        t134 = min(x1, x3, x4)
+        t234 = min(x2, x3, x4)
+
+        # quadruple AND
+        y = min(x1, x2, x3, x4)
 
         ekn_l[l] = D_vec[l] * (
-            (Q1 * x1) + (Q2 * x2) + (Q3 * x3)
-            - (Q1 * Q2 * z12) - (Q1 * Q3 * z13) - (Q2 * Q3 * z23)
-            + (Q1 * Q2 * Q3 * y))
+            (Q1 * x1) + (Q2 * x2) + (Q3 * x3) + (Q4 * x4)
+            - (Q1 * Q2 * z12) - (Q1 * Q3 * z13) - (Q1 * Q4 * z14)
+            - (Q2 * Q3 * z23) - (Q2 * Q4 * z24) - (Q3 * Q4 * z34)
+            + (Q1 * Q2 * Q3 * t123)
+            + (Q1 * Q2 * Q4 * t124)
+            + (Q1 * Q3 * Q4 * t134)
+            + (Q2 * Q3 * Q4 * t234)
+            - (Q1 * Q2 * Q3 * Q4 * y)
+        )
 
     return float(np.sum(ekn_l))
 
-def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x, j1_l_spatial, j2_l_spatial, j3_l_spatial):
-    """
-    Expected captures Ec^s = sum_l ekc_l^s with 3 closest traps:
 
-    ekc_l^s = D_l^s K ( P1 x1 + P2 x2 + P3 x3 )
+def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances,
+                       trap_x, j1_l_spatial, j2_l_spatial, j3_l_spatial, j4_l_spatial):
+    """
+    Expected captures Ec^s = sum_l ekc_l^s with 4 closest traps:
+
+    ekc_l^s = D_l^s K ( P1 x1 + P2 x2 + P3 x3 + P4 x4 )
     """
     alpha1 = 1.0 / (2.0 * sigma * sigma)
     prob_cap = g0 * np.exp(-alpha1 * (distances ** 2))  # (J, L)
@@ -80,16 +112,23 @@ def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
         j1 = j1_l_spatial[l]
         j2 = j2_l_spatial[l]
         j3 = j3_l_spatial[l]
+        j4 = j4_l_spatial[l]          # CHANGED for 4 traps
 
         P1 = prob_cap[j1, l]
         P2 = prob_cap[j2, l]
         P3 = prob_cap[j3, l]
+        P4 = prob_cap[j4, l]          # CHANGED for 4 traps
 
         ekc_l = D_vec[l] * K * (
-            (P1 * trap_x[j1]) + (P2 * trap_x[j2]) + (P3 * trap_x[j3]))
+            (P1 * trap_x[j1]) +
+            (P2 * trap_x[j2]) +
+            (P3 * trap_x[j3]) +
+            (P4 * trap_x[j4])
+        )
         expected_c += ekc_l
 
     return float(expected_c)
+
 
 def compute_expected_r(expected_c, expected_n):
     """Expected recaptures: Er^s = Ec^s - En^s"""
@@ -99,6 +138,7 @@ def compute_expected_r(expected_c, expected_n):
 #################################################################################################################################
 ############                                         READ IN PARAMETERS                                              ############
 #################################################################################################################################
+
 
 sa_groups = [
     [64, 74, 76, 78, 109, 125, 164, 204, 238, 250],   # SA1
@@ -123,14 +163,15 @@ sa_groups = [
     [34, 68, 80, 93, 105, 155, 197, 219, 282, 298]
 ]
 
-budgets = [10, 20, 30, 40, 50, 60, 70, 80]
+budgets = [10, 20, 30, 40, 60, 70, 80]
 K = 5
 
-base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/Jan9_3trap_TESTING"
+base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/Jan10_5trap_TESTING"
+
 
 # Read in activity centers
 ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
-ac_coords = ac_coords[None]     # extract the dataframe from the returned dict
+ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values
 
 # Read in candidate trap locations
@@ -138,39 +179,45 @@ trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_ma
 trap_coords_list = trap_coords[['x', 'y']].values
 num_traps = len(trap_coords_list)
 
-# Calculate distances between all candidate traps and potential activity centers
+# Distances trap–AC
 traps = trap_coords_list[:, np.newaxis, :]
 centers = ac_coords_list[np.newaxis, :, :]
 distances = np.linalg.norm(traps - centers, axis=2)
-num_pixels = distances.shape[1]  # L
+num_pixels = distances.shape[1]
 
 # Read in parameters per scenario
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
 
 
 #################################################################################################################################
-############                                          FIND J1, J2, J3                                               ############
+############                                  FIND J1, J2, J3, J4                                                 ############
 #################################################################################################################################
 
-print("Computing closest traps j1(l), j2(l), j3(l) to each activity center l")
 
-j1_l_spatial = np.argmin(distances, axis=0)  # Closest trap -- row index j with the smallest distance in each column l
+print("Computing closest traps j1(l)..j4(l) to each activity center l")
+
+j1_l_spatial = np.argmin(distances, axis=0)
 
 distances_masked = distances.copy()
 distances_masked[j1_l_spatial, np.arange(num_pixels)] = np.inf
-j2_l_spatial = np.argmin(distances_masked, axis=0)  # 2nd closest trap
+j2_l_spatial = np.argmin(distances_masked, axis=0)
 
 distances_masked2 = distances_masked.copy()
 distances_masked2[j2_l_spatial, np.arange(num_pixels)] = np.inf
-j3_l_spatial = np.argmin(distances_masked2, axis=0)  # 3rd closest trap
+j3_l_spatial = np.argmin(distances_masked2, axis=0)
+
+distances_masked3 = distances_masked2.copy()
+distances_masked3[j3_l_spatial, np.arange(num_pixels)] = np.inf
+j4_l_spatial = np.argmin(distances_masked3, axis=0)   # CHANGED for 4 traps
 
 
 #################################################################################################################################
 ############                                        PRE-COMPUTE P AND Q                                              ############
 #################################################################################################################################
 
-# Precompute per-scenario P and Q using 3 closest traps
-scenario_precomp = {}  # sa_idx -> param_id -> dict with P1,P2,P3,Q1,Q2,Q3
+
+# Precompute per-scenario P and Q using 4 closest traps
+scenario_precomp = {}  # sa_idx -> param_id -> dict with P1..P4,Q1..Q4
 for sa_idx, group in enumerate(sa_groups, start=1):
     print(f"Precomputing P/Q for SA group {sa_idx}...")
     scenario_precomp[sa_idx] = {}
@@ -180,28 +227,28 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         g0_val = param_row['g0']
         sigma_val = param_row['sigma']
         alpha1 = 1.0 / (2.0 * sigma_val ** 2)
-        prob_cap = g0_val * np.exp(-alpha1 * (distances ** 2))  # shape: (num_traps, num_pixels)
+        prob_cap = g0_val * np.exp(-alpha1 * (distances ** 2))  # (num_traps, num_pixels)
 
         P1 = prob_cap[j1_l_spatial, np.arange(num_pixels)]
         P2 = prob_cap[j2_l_spatial, np.arange(num_pixels)]
         P3 = prob_cap[j3_l_spatial, np.arange(num_pixels)]
+        P4 = prob_cap[j4_l_spatial, np.arange(num_pixels)]       # CHANGED for 4 traps
 
         Q1 = 1.0 - (1.0 - P1) ** K
         Q2 = 1.0 - (1.0 - P2) ** K
         Q3 = 1.0 - (1.0 - P3) ** K
+        Q4 = 1.0 - (1.0 - P4) ** K   # CHANGED for 4 traps
 
         scenario_precomp[sa_idx][param_id] = {
-            "P1": P1,
-            "P2": P2,
-            "P3": P3,
-            "Q1": Q1,
-            "Q2": Q2,
-            "Q3": Q3}
+            "P1": P1, "P2": P2, "P3": P3, "P4": P4,
+            "Q1": Q1, "Q2": Q2, "Q3": Q3, "Q4": Q4
+        }
 
 
 #################################################################################################################################
 ############                                                  OPTIMIZE                                               ############
 #################################################################################################################################
+
 
 results = []
 
@@ -219,10 +266,24 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         m = gp.Model()
         m.ModelName = f"SA{sa_idx}_budget{budget}"
         x = m.addVars(num_traps, vtype=GRB.BINARY)
-        z12 = m.addVars(num_pixels, vtype=GRB.BINARY)       # z12 = x1 AND x2
-        z13 = m.addVars(num_pixels, vtype=GRB.BINARY)       # z13 = x1 AND x3
-        z23 = m.addVars(num_pixels, vtype=GRB.BINARY)       # z23 = x2 AND x3
-        y   = m.addVars(num_pixels, vtype=GRB.BINARY)       # y = x1 AND x2 AND x3
+
+        # Pairwise AND vars (6)
+        z12 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        z13 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        z14 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        z23 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        z24 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        z34 = m.addVars(num_pixels, vtype=GRB.BINARY)
+
+        # Triple AND vars (4)
+        t123 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        t124 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        t134 = m.addVars(num_pixels, vtype=GRB.BINARY)
+        t234 = m.addVars(num_pixels, vtype=GRB.BINARY)
+
+        # Quadruple AND var (1)
+        y = m.addVars(num_pixels, vtype=GRB.BINARY)
+
         Ekmin = m.addVars(len(group), vtype=GRB.CONTINUOUS, lb=0)
 
         # Objective: max average Ekmin over scenarios in group
@@ -234,32 +295,66 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         # Budget constraint
         m.addConstr(gp.quicksum(x[j] for j in range(num_traps)) <= budget)
 
-        # Range constraints for z and y variables
+        # Range constraints for z, t, y variables
         for l in range(num_pixels):
             j1 = j1_l_spatial[l]
             j2 = j2_l_spatial[l]
             j3 = j3_l_spatial[l]
+            j4 = j4_l_spatial[l]
 
-            # z12 = x1 AND x2
+            # z_ab = x_a AND x_b
             m.addConstr(z12[l] <= x[j1])
             m.addConstr(z12[l] <= x[j2])
             m.addConstr(z12[l] >= x[j1] + x[j2] - 1)
 
-            # z13 = x1 AND x3
             m.addConstr(z13[l] <= x[j1])
             m.addConstr(z13[l] <= x[j3])
             m.addConstr(z13[l] >= x[j1] + x[j3] - 1)
 
-            # z23 = x2 AND x3
+            m.addConstr(z14[l] <= x[j1])
+            m.addConstr(z14[l] <= x[j4])
+            m.addConstr(z14[l] >= x[j1] + x[j4] - 1)
+
             m.addConstr(z23[l] <= x[j2])
             m.addConstr(z23[l] <= x[j3])
             m.addConstr(z23[l] >= x[j2] + x[j3] - 1)
 
-            # y = x1 AND x2 AND x3
+            m.addConstr(z24[l] <= x[j2])
+            m.addConstr(z24[l] <= x[j4])
+            m.addConstr(z24[l] >= x[j2] + x[j4] - 1)
+
+            m.addConstr(z34[l] <= x[j3])
+            m.addConstr(z34[l] <= x[j4])
+            m.addConstr(z34[l] >= x[j3] + x[j4] - 1)
+
+            # t_abc = x_a AND x_b AND x_c  (standard linearization)
+            # enforce t <= each x; t >= sum(x) - 2
+            m.addConstr(t123[l] <= x[j1])
+            m.addConstr(t123[l] <= x[j2])
+            m.addConstr(t123[l] <= x[j3])
+            m.addConstr(t123[l] >= x[j1] + x[j2] + x[j3] - 2)
+
+            m.addConstr(t124[l] <= x[j1])
+            m.addConstr(t124[l] <= x[j2])
+            m.addConstr(t124[l] <= x[j4])
+            m.addConstr(t124[l] >= x[j1] + x[j2] + x[j4] - 2)
+
+            m.addConstr(t134[l] <= x[j1])
+            m.addConstr(t134[l] <= x[j3])
+            m.addConstr(t134[l] <= x[j4])
+            m.addConstr(t134[l] >= x[j1] + x[j3] + x[j4] - 2)
+
+            m.addConstr(t234[l] <= x[j2])
+            m.addConstr(t234[l] <= x[j3])
+            m.addConstr(t234[l] <= x[j4])
+            m.addConstr(t234[l] >= x[j2] + x[j3] + x[j4] - 2)
+
+            # y = x1 AND x2 AND x3 AND x4
             m.addConstr(y[l] <= x[j1])
             m.addConstr(y[l] <= x[j2])
             m.addConstr(y[l] <= x[j3])
-            m.addConstr(y[l] >= x[j1] + x[j2] + x[j3] - 2)
+            m.addConstr(y[l] <= x[j4])
+            m.addConstr(y[l] >= x[j1] + x[j2] + x[j3] + x[j4] - 3)
 
         # Constraints per scenario
         for s_idx, param_id in enumerate(group):
@@ -271,69 +366,99 @@ for sa_idx, group in enumerate(sa_groups, start=1):
             density_df = pd.read_csv(dmod_path)
             D_vec = density_df['D_mod'].values * 25
 
-            # En constraint: Ekmin^s <= sum_l ekn_l^s
+            # En constraint: Ekmin^s <= sum_l ekn_l^s (4-trap version)
             ekn_sum = gp.LinExpr()
             for l in range(num_pixels):
                 j1 = j1_l_spatial[l]
                 j2 = j2_l_spatial[l]
                 j3 = j3_l_spatial[l]
+                j4 = j4_l_spatial[l]
 
                 P1 = prob_cap[j1, l]
                 P2 = prob_cap[j2, l]
                 P3 = prob_cap[j3, l]
+                P4 = prob_cap[j4, l]
 
                 Q1 = 1.0 - (1.0 - P1) ** K
                 Q2 = 1.0 - (1.0 - P2) ** K
                 Q3 = 1.0 - (1.0 - P3) ** K
+                Q4 = 1.0 - (1.0 - P4) ** K
 
                 ekn_l = D_vec[l] * (
-                    Q1 * x[j1] + Q2 * x[j2] + Q3 * x[j3]
+                    Q1 * x[j1] + Q2 * x[j2] + Q3 * x[j3] + Q4 * x[j4]
                     - Q1 * Q2 * z12[l]
                     - Q1 * Q3 * z13[l]
+                    - Q1 * Q4 * z14[l]
                     - Q2 * Q3 * z23[l]
-                    + Q1 * Q2 * Q3 * y[l]
+                    - Q2 * Q4 * z24[l]
+                    - Q3 * Q4 * z34[l]
+                    + Q1 * Q2 * Q3 * t123[l]
+                    + Q1 * Q2 * Q4 * t124[l]
+                    + Q1 * Q3 * Q4 * t134[l]
+                    + Q2 * Q3 * Q4 * t234[l]
+                    - Q1 * Q2 * Q3 * Q4 * y[l]
                 )
                 ekn_sum += ekn_l
 
             m.addConstr(Ekmin[s_idx] <= ekn_sum, name=f"Ekn_min{s_idx}")
 
-            # Ekr constraint using gamma, lambda, xi from your derivation
+            # Ekr constraint using 4-trap gamma/lambda/mu/zeta
             pre = scenario_precomp[sa_idx][param_id]
             P1_all = pre["P1"]
             P2_all = pre["P2"]
             P3_all = pre["P3"]
+            P4_all = pre["P4"]
             Q1_all = pre["Q1"]
             Q2_all = pre["Q2"]
             Q3_all = pre["Q3"]
+            Q4_all = pre["Q4"]
 
             ekr_sum = gp.LinExpr()
             for l in range(num_pixels):
                 j1 = j1_l_spatial[l]
                 j2 = j2_l_spatial[l]
                 j3 = j3_l_spatial[l]
+                j4 = j4_l_spatial[l]
 
                 P1_l = P1_all[l]
                 P2_l = P2_all[l]
                 P3_l = P3_all[l]
+                P4_l = P4_all[l]
                 Q1_l = Q1_all[l]
                 Q2_l = Q2_all[l]
                 Q3_l = Q3_all[l]
+                Q4_l = Q4_all[l]
 
-                # gamma, lambda, xi as defined in screenshot [file:44]
+                # gamma_k = K P_k - Q_k
                 gamma1 = K * P1_l - Q1_l
                 gamma2 = K * P2_l - Q2_l
                 gamma3 = K * P3_l - Q3_l
+                gamma4 = K * P4_l - Q4_l
 
+                # pairwise
                 lambda12 = Q1_l * Q2_l
                 lambda13 = Q1_l * Q3_l
+                lambda14 = Q1_l * Q4_l
                 lambda23 = Q2_l * Q3_l
+                lambda24 = Q2_l * Q4_l
+                lambda34 = Q3_l * Q4_l
 
-                xi = Q1_l * Q2_l * Q3_l
+                # triples
+                mu123 = Q1_l * Q2_l * Q3_l
+                mu124 = Q1_l * Q2_l * Q4_l
+                mu134 = Q1_l * Q3_l * Q4_l
+                mu234 = Q2_l * Q3_l * Q4_l
+
+                # quadruple
+                zeta = Q1_l * Q2_l * Q3_l * Q4_l
 
                 ekr_l = D_vec[l] * (
-                    gamma1 * x[j1] + gamma2 * x[j2] + gamma3 * x[j3]
-                    + lambda12 * z12[l] + lambda13 * z13[l] + lambda23 * z23[l]
-                    - xi * y[l]
+                    gamma1 * x[j1] + gamma2 * x[j2] + gamma3 * x[j3] + gamma4 * x[j4]
+                    + lambda12 * z12[l] + lambda13 * z13[l] + lambda14 * z14[l]
+                    + lambda23 * z23[l] + lambda24 * z24[l] + lambda34 * z34[l]
+                    - mu123 * t123[l] - mu124 * t124[l]
+                    - mu134 * t134[l] - mu234 * t234[l]
+                    + zeta * y[l]
                 )
                 ekr_sum += ekr_l
 
@@ -343,11 +468,6 @@ for sa_idx, group in enumerate(sa_groups, start=1):
         start_time = time.time()
         m.optimize()
         end_time = time.time()
-
-
-#################################################################################################################################
-############                                              PRINT RESULTS                                              ############
-#################################################################################################################################
 
         if m.status == GRB.OPTIMAL:
             selected_idx = [j for j in range(num_traps) if x[j].X > 0.5]
@@ -365,14 +485,20 @@ for sa_idx, group in enumerate(sa_groups, start=1):
             budget_folder = os.path.join(base_dir, f"Budget = {budget}")
             os.makedirs(budget_folder, exist_ok=True)
 
-            # Save selected trap IDs to csv file
-            selected_csv_path = os.path.join(budget_folder, f"IP-selected_ids-budget{budget}-SA{sa_idx}.csv")
-            selected_ids = trap_coords.iloc[selected_idx]['Trap_index'].tolist()
+            # Save selected trap IDs
+            selected_csv_path = os.path.join(
+                budget_folder,
+                f"IP-selected_ids-budget{budget}-SA{sa_idx}.csv"
+            )
             selected_df = trap_coords.iloc[selected_idx][['Trap_index', 'x', 'y']]
             selected_df.to_csv(selected_csv_path, index=False)
 
-            # Save excluded trap IDs to txt file
-            excluded_txt_path = os.path.join(budget_folder, f"IP-excluded_ids-budget{budget}-SA{sa_idx}.txt")
+            # Save excluded trap IDs
+            excluded_txt_path = os.path.join(
+                budget_folder,
+                f"IP-excluded_ids-budget{budget}-SA{sa_idx}.txt"
+            )
+            selected_ids = selected_df['Trap_index'].tolist()
             all_ids = set(trap_coords['Trap_index'])
             excluded_ids = sorted(all_ids - set(selected_ids))
             with open(excluded_txt_path, "w") as f:
@@ -382,6 +508,6 @@ for sa_idx, group in enumerate(sa_groups, start=1):
             print(f"SA{sa_idx} budget{budget} -> obj:{m.ObjVal:.6f}")
 
 results_df = pd.DataFrame(results)
-results_csv_path = os.path.join(base_dir, "IP4_Opt_3traps.csv")
+results_csv_path = os.path.join(base_dir, "IP5_Opt_4traps.csv")
 results_df.to_csv(results_csv_path, index=False)
 print(f"Results saved to {results_csv_path}")
