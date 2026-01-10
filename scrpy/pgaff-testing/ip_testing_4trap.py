@@ -166,7 +166,7 @@ sa_groups = [
 budgets = [10, 20, 30, 40, 60, 70, 80]
 K = 5
 
-base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/Jan10_5trap_TESTING"
+base_dir = "/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/secr/Integer Programming/Marten/Jan10_4trap_TESTING"
 
 
 # Read in activity centers
