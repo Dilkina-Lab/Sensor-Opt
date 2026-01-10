@@ -15,7 +15,7 @@ import sys
 
 def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x, j1_l_spatial, j2_l_spatial, j3_l_spatial):
     """
-    Compute En^s = sum_l ekn_l^s using 3 closest traps
+    En^s = sum_l ekn_l^s using 3 closest traps
 
     ekn_l^s = D_l^s ( Q1 x1 + Q2 x2 + Q3 x3
                         - Q1 Q2 z12 - Q1 Q3 z13 - Q2 Q3 z23
@@ -60,8 +60,7 @@ def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
         ekn_l[l] = D_vec[l] * (
             (Q1 * x1) + (Q2 * x2) + (Q3 * x3)
             - (Q1 * Q2 * z12) - (Q1 * Q3 * z13) - (Q2 * Q3 * z23)
-            + (Q1 * Q2 * Q3 * y)
-        )
+            + (Q1 * Q2 * Q3 * y))
 
     return float(np.sum(ekn_l))
 
@@ -87,14 +86,13 @@ def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, tra
         P3 = prob_cap[j3, l]
 
         ekc_l = D_vec[l] * K * (
-            (P1 * trap_x[j1]) + (P2 * trap_x[j2]) + (P3 * trap_x[j3])
-        )
+            (P1 * trap_x[j1]) + (P2 * trap_x[j2]) + (P3 * trap_x[j3]))
         expected_c += ekc_l
 
     return float(expected_c)
 
 def compute_expected_r(expected_c, expected_n):
-    """Expected recaptures: Er^s = Ec^s - En^s"""
+    """Expected recaptures Er^s = Ec^s - En^s"""
     return expected_c - expected_n
 
 
