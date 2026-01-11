@@ -190,40 +190,59 @@ ggsave(file="mean_error.tiff", bg="white",
 
 
 ############################# HANNAH'S NEW VERSIONS ##############################
+############################# HANNAH'S NEW VERSIONS ##############################
 # Clear memory
-rm(list=ls())
+rm(list = ls())
+
 
 # Load required packages
-list.of.packages <- c("tidyverse", "lubridate", "googleCloudStorageR",
-                      "dplyr", "sf", "secr", "terra", "ggplot2", "cowplot", "scales")
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
+list.of.packages <- c(
+  "tidyverse", "lubridate", "googleCloudStorageR",
+  "dplyr", "sf", "secr", "terra", "ggplot2", "cowplot", "scales"
+)
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
+if (length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, require, character.only = TRUE)
 
+
+# Authenticate GCS
 gcs_auth(json_file = "SensorOpt/secr/pgaff-camera-optim.json")
 
+
 # Download required files
-gcs_get_object("Synthetic_sim/param_values_for_each_draw300_marten.csv", 
-               bucket = "pgaff_simulations", saveToDisk = "param_values_for_each_draw300_marten.csv", overwrite=TRUE)
-gcs_get_object("Synthetic_sim/500m_mask_marten.RDS", bucket = "pgaff_simulations", 
-               saveToDisk = "500m_mask_marten.RDS", overwrite=TRUE)
+gcs_get_object(
+  "Synthetic_sim/param_values_for_each_draw300_marten.csv",
+  bucket = "pgaff_simulations",
+  saveToDisk = "param_values_for_each_draw300_marten.csv",
+  overwrite = TRUE
+)
+gcs_get_object(
+  "Synthetic_sim/500m_mask_marten.RDS",
+  bucket = "pgaff_simulations",
+  saveToDisk = "500m_mask_marten.RDS",
+  overwrite = TRUE
+)
+
 
 # Load mask and covariates
 mask <- readRDS("500m_mask_marten.RDS")
 mask_covs <- covariates(mask)
 
-# Define the three beta files
+
+# Define the four beta files
 beta_files <- list(
-  "Genetic" = "SAA3-SA19-70traps_test_RSE.csv",
-  "Greedy" = "SA2-20-70traps_test_RSE_CELLDENSITIES.csv", 
-  "IP" = "IP2-70traps_SA18_test_RSE.csv"
+  "Genetic"     = "SAA3-SA19-70traps_test_RSE.csv",
+  "Greedy"      = "SA2-20-70traps_test_RSE_CELLDENSITIES.csv",
+  "IP (3 trap)" = "IP4-70traps_SA3_test_RSE.csv",
+  "IP (4 trap)" = "IP5-70traps-SA3-test-RSE.csv"
 )
+
 
 # Process each method
 results_list <- list()
 summary_stats <- data.frame()
 
-for(method_name in names(beta_files)) {
+for (method_name in names(beta_files)) {
   cat("Processing", method_name, "...\n")
   
   # Load betas and CHECK COLUMN NAMES
@@ -236,16 +255,20 @@ for(method_name in names(beta_files)) {
   cat("Loaded", nrow(betas), "draws for", method_name, "\n")
   
   # Storage matrices
-  all_Dhat <- all_error <- matrix(NA, nrow = nrow(mask), ncol = nrow(betas))
+  all_Dhat  <- matrix(NA, nrow = nrow(mask), ncol = nrow(betas))
+  all_error <- matrix(NA, nrow = nrow(mask), ncol = nrow(betas))
   
   # Loop through draws - ROBUST COEFS EXTRACTION
-  for(i in 1:nrow(betas)) {
+  for (i in 1:nrow(betas)) {
     # Find beta columns dynamically
-    beta_cols <- intersect(colnames(betas), c("beta0", "beta1", "beta2", 
-                                             "Beta0", "Beta1", "Beta2",
-                                             "b0", "b1", "b2"))
+    beta_cols <- intersect(
+      colnames(betas),
+      c("beta0", "beta1", "beta2",
+        "Beta0", "Beta1", "Beta2",
+        "b0", "b1", "b2")
+    )
     
-    if(length(beta_cols) != 3) {
+    if (length(beta_cols) != 3) {
       cat("ERROR: Could not find 3 beta columns in", method_name, "\n")
       cat("Available columns:", paste(colnames(betas), collapse = ", "), "\n")
       next
@@ -260,73 +283,98 @@ for(method_name in names(beta_files)) {
     Dhat <- D_tmp / scale_factor
     
     draw <- betas[i, "Draw"]
-    gcs_get_object(paste0("Synthetic_sim/Constant_detection/D_mod/Dmod_draw_", draw, ".csv"), 
-                   bucket = "pgaff_simulations", saveToDisk = "density_temp.csv", overwrite = TRUE)
+    gcs_get_object(
+      paste0("Synthetic_sim/Constant_detection/D_mod/Dmod_draw_", draw, ".csv"),
+      bucket = "pgaff_simulations",
+      saveToDisk = "density_temp.csv",
+      overwrite = TRUE
+    )
     Dtrue <- read.csv("density_temp.csv")
     
     Dout <- Dtrue %>%
       mutate(xy = paste(x, y, sep = "_")) %>%
-      left_join(data.frame(xy = paste(mask$x, mask$y, sep = "_"), Dhat = Dhat), by = "xy") %>%
+      left_join(
+        data.frame(
+          xy   = paste(mask$x, mask$y, sep = "_"),
+          Dhat = Dhat
+        ),
+        by = "xy"
+      ) %>%
       select(-xy) %>%
       mutate(signed_error = Dhat - D_mod)
     
-    all_Dhat[, i] <- Dhat
+    all_Dhat[, i]  <- Dhat
     all_error[, i] <- Dout$signed_error
   }
   
   # Compute means
-  mean_Dhat <- rowMeans(all_Dhat, na.rm = TRUE)
+  mean_Dhat  <- rowMeans(all_Dhat,  na.rm = TRUE)
   mean_error <- rowMeans(all_error, na.rm = TRUE)
   
   # Store results
   results_list[[method_name]] <- data.frame(
-    x = mask$x, y = mask$y,
-    mean_Dhat = mean_Dhat,
+    x          = mask$x,
+    y          = mask$y,
+    mean_Dhat  = mean_Dhat,
     mean_error = mean_error,
-    method = method_name
+    method     = method_name
   )
   
   # Save GeoTIFFs
   r_template <- rast(mask)
-  r_template$mean_Dhat <- mean_Dhat
+  r_template$mean_Dhat  <- mean_Dhat
   r_template$mean_error <- mean_error
   
-  writeRaster(r_template[["mean_Dhat"]], paste0(method_name, "_density_geotiff.tif"), 
-              overwrite = TRUE, gdal = c("COMPRESS=LZW", "TILED=YES"))
-  writeRaster(r_template[["mean_error"]], paste0(method_name, "_error_geotiff.tif"), 
-              overwrite = TRUE, gdal = c("COMPRESS=LZW", "TILED=YES"))
+  writeRaster(
+    r_template[["mean_Dhat"]],
+    paste0(method_name, "_density_geotiff.tif"),
+    overwrite = TRUE,
+    gdal = c("COMPRESS=LZW", "TILED=YES")
+  )
+  writeRaster(
+    r_template[["mean_error"]],
+    paste0(method_name, "_error_geotiff.tif"),
+    overwrite = TRUE,
+    gdal = c("COMPRESS=LZW", "TILED=YES")
+  )
   
-  summary_stats <- rbind(summary_stats, data.frame(
-    method = method_name,
-    Dhat_min = min(mean_Dhat, na.rm=TRUE),
-    Dhat_max = max(mean_Dhat, na.rm=TRUE),
-    error_min = min(mean_error, na.rm=TRUE),
-    error_max = max(mean_error, na.rm=TRUE)
-  ))
+  summary_stats <- rbind(
+    summary_stats,
+    data.frame(
+      method    = method_name,
+      Dhat_min  = min(mean_Dhat,  na.rm = TRUE),
+      Dhat_max  = max(mean_Dhat,  na.rm = TRUE),
+      error_min = min(mean_error, na.rm = TRUE),
+      error_max = max(mean_error, na.rm = TRUE)
+    )
+  )
   
   cat(method_name, "complete.\n\n")
 }
+
 
 # Combine all results
 all_results <- bind_rows(results_list)
 write.csv(all_results, "all_methods_density_error_summary.csv", row.names = FALSE)
 write.csv(summary_stats, "summary_statistics.csv", row.names = FALSE)
 
+
 # === CLEAN LEGENDS: MIN/MID/MAX ONLY ===
-global_dhat_range <- c(0, 0.30)
+global_dhat_range  <- c(0, 0.30)
 global_error_range <- c(-0.10, 0.30)
 
-dhat_min <- global_dhat_range[1]
-dhat_mid <- mean(global_dhat_range)
-dhat_max <- global_dhat_range[2]
+dhat_min    <- global_dhat_range[1]
+dhat_mid    <- mean(global_dhat_range)
+dhat_max    <- global_dhat_range[2]
 dhat_breaks <- c(dhat_min, dhat_mid, dhat_max)
 dhat_labels <- sprintf("%.2f", dhat_breaks)
 
-err_min <- global_error_range[1]
-err_mid <- mean(global_error_range)
-err_max <- global_error_range[2]
-error_breaks <- c(err_min, err_mid, err_max)
-error_labels <- sprintf("%.2f", error_breaks)
+err_min       <- global_error_range[1]
+err_mid       <- mean(global_error_range)
+err_max       <- global_error_range[2]
+error_breaks  <- c(err_min, err_mid, err_max)
+error_labels  <- sprintf("%.2f", error_breaks)
+
 
 # === DENSITY PLOTS ===
 p_density <- ggplot(all_results, aes(x, y, fill = mean_Dhat)) +
@@ -335,65 +383,108 @@ p_density <- ggplot(all_results, aes(x, y, fill = mean_Dhat)) +
     limits = global_dhat_range,
     breaks = dhat_breaks,
     labels = dhat_labels,
-    oob = scales::squish,
-    name = "Mean Dhat"
+    oob    = scales::squish,
+    name   = "Mean Dhat"
   ) +
-  coord_equal() + theme_void() + facet_wrap(~method, ncol = 3)
+  coord_equal() +
+  theme_void() +
+  facet_wrap(~method, ncol = 2)
 
 print(p_density)
-ggsave("all_methods_density.tiff", p_density, width = 15, height = 5, dpi = 600, compression = "lzw", bg = "white")
+ggsave(
+  "all_methods_density.tiff",
+  p_density,
+  width = 15,
+  height = 5,
+  dpi = 600,
+  compression = "lzw",
+  bg = "white"
+)
+
 
 # Individual density plots
-for(method_name in names(beta_files)) {
+for (method_name in names(beta_files)) {
   p <- ggplot(results_list[[method_name]], aes(x, y, fill = mean_Dhat)) +
     geom_tile() +
     scale_fill_viridis_c(
       limits = global_dhat_range,
       breaks = dhat_breaks,
       labels = dhat_labels,
-      oob = scales::squish,
-      name = "Mean Dhat"
+      oob    = scales::squish,
+      name   = "Mean Dhat"
     ) +
-    coord_equal() + theme_void() + ggtitle(paste(method_name, "Density"))
+    coord_equal() +
+    theme_void() +
+    ggtitle(paste(method_name, "Density"))
   
   print(p)
-  ggsave(paste0(method_name, "_density.tiff"), p, width = 10, height = 7, dpi = 600, compression = "lzw", bg = "white")
+  ggsave(
+    paste0(method_name, "_density.tiff"),
+    p,
+    width = 10,
+    height = 7,
+    dpi = 600,
+    compression = "lzw",
+    bg = "white"
+  )
 }
+
 
 # === ERROR PLOTS ===
 p_error <- ggplot(all_results, aes(x, y, fill = mean_error)) +
   geom_tile() +
   scale_fill_gradientn(
-    colors = c("blue4","blue","lightblue","white","yellow","orange","red3"),
+    colors = c("blue4", "blue", "lightblue", "white", "yellow", "orange", "red3"),
     limits = global_error_range,
     breaks = error_breaks,
     labels = error_labels,
     values = scales::rescale(c(-0.10, -0.02, 0, 0.02, 0.05, 0.10, 0.30)),
-    oob = scales::squish,
-    name = "Mean Error"
+    oob    = scales::squish,
+    name   = "Mean Error"
   ) +
-  coord_equal() + theme_void() + facet_wrap(~method, ncol = 3)
+  coord_equal() +
+  theme_void() +
+  facet_wrap(~method, ncol = 2)
 
 print(p_error)
-ggsave("all_methods_error.tiff", p_error, width = 15, height = 5, dpi = 600, compression = "lzw", bg = "white")
+ggsave(
+  "all_methods_error.tiff",
+  p_error,
+  width = 15,
+  height = 5,
+  dpi = 600,
+  compression = "lzw",
+  bg = "white"
+)
+
 
 # Individual error plots
-for(method_name in names(beta_files)) {
+for (method_name in names(beta_files)) {
   p <- ggplot(results_list[[method_name]], aes(x, y, fill = mean_error)) +
     geom_tile() +
     scale_fill_gradientn(
-      colors = c("blue4","blue","lightblue","white","yellow","orange","red3"),
+      colors = c("blue4", "blue", "lightblue", "white", "yellow", "orange", "red3"),
       limits = global_error_range,
       breaks = error_breaks,
       labels = error_labels,
       values = scales::rescale(c(-0.10, -0.02, 0, 0.02, 0.05, 0.10, 0.30)),
-      oob = scales::squish,
-      name = "Mean Error"
+      oob    = scales::squish,
+      name   = "Mean Error"
     ) +
-    coord_equal() + theme_void() + ggtitle(paste(method_name, "Error"))
+    coord_equal() +
+    theme_void() +
+    ggtitle(paste(method_name, "Error"))
   
   print(p)
-  ggsave(paste0(method_name, "_error.tiff"), p, width = 10, height = 7, dpi = 600, compression = "lzw", bg = "white")
+  ggsave(
+    paste0(method_name, "_error.tiff"),
+    p,
+    width = 10,
+    height = 7,
+    dpi = 600,
+    compression = "lzw",
+    bg = "white"
+  )
 }
 
 print(summary_stats)
