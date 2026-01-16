@@ -20,31 +20,37 @@ warnings.filterwarnings("ignore")
 import logging
 logging.getLogger("distributed").setLevel(logging.ERROR)
 
+"""
+Hi Arielle and Sean! Here is my code for the greedy algorithm. There are some items that are hardcoded (like the file paths and the parameter draws evaluated over). 
+This code will have to be updated so we can randomly select training paremeter sets for each of our repetitions based on the simulations generated from the ranges our users input.
+There are many file outputs and print statements that are probably not relavent to the webapp as well, and I have labeled those as such.
+"""
+
 #################################################################################################################################
 ############                                        UTILITY FUNCTIONS                                                ############
 #################################################################################################################################
 
 def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
     """
-    Computes expected number of unique individuals detected in a spatial capture-recapture study.
+    Computes expected number of unique individuals detected in a spatial capture-recapture study BASED ON THE FAST HEURISTIC from Efford/Boulanger.
         ac_locs (2D array): Shape (num_activity_centers, 2) - x and y coordinates of activity centers.
         trap_locs (2D array): Shape (num_traps, 2) - x and y coordinates of all potential trap locations.
         g0 (float): Detection probability at the activity center.
         sigma (float): Scale parameter of the detection function.
         K (int): Number of sampling periods.
-        density (float): Density of individuals per unit area.
+        density (float): Density of animals
         prob_cap (2D array): Shape (num_traps, num_activity_centers) - capture probability at each trap j of individuals with activity center l.
         trap_x (1D array): 1D array of activated trap locations.
     """
     alpha1 = (1/(2*sigma*sigma))
-    prob_cap = ((g0)*np.exp(-alpha1*(distances**2)))      # Array of size (# traps, # poential activity centers)
-    for t in range(len(trap_locs)): # for trap locations that are not selected, set all capture probs to 0
+    prob_cap = ((g0)*np.exp(-alpha1*(distances**2)))        # Array of size (# traps, # poential activity centers)
+    for t in range(len(trap_locs)):                         # for trap locations that are not selected, set all capture probs to 0
         if int(trap_x[t]) == 0:
             prob_cap[t,...] = np.zeros(ac_locs.shape[0])
     i_cap_hist = np.squeeze(np.zeros((len(trap_locs), 1)))  # Initialize empty capture history 
-    p_empty_cap_hist = compute_cond_lik_ind(len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist)
-    p_nonempty = 1 - p_empty_cap_hist
-    expected_n = np.sum(p_nonempty*density)
+    p_empty_cap_hist = compute_cond_lik_ind(len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist)  # compute probability of never being captured (call below function)
+    p_nonempty = 1 - p_empty_cap_hist               # probabily of being captured at least once
+    expected_n = np.sum(p_nonempty*density)         # En equation based on Efford/Boulanger heuristic
     return expected_n
 
 def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
@@ -65,6 +71,9 @@ def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_c
     return np.exp(log_cond_lik_sums)
 
 def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
+    """
+    Computes expected number of unique individuals detected across multiple scenarios based on the fast heuristic from Efford/Boulanger.
+    """
     nscenarios = len(g0)
     e_n = np.zeros((nscenarios,1))
     for s in range(nscenarios):
@@ -72,17 +81,31 @@ def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
     return(e_n)
 
 def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
-    alpha1 = (1/(2*sigma*sigma))
-    prob_cap = ((g0)*np.exp(-alpha1*(distances**2)))
-    density_array = np.array(density).flatten()
-    for t in range(len(trap_locs)):
+    """
+    Computes expected number of captures in a spatial capture-recapture study BASED ON THE FAST HEURISTIC from Efford/Boulanger.
+        ac_locs (2D array): Shape (num_activity_centers, 2)
+        trap_locs (2D array): Shape (num_traps, 2)
+        g0 (float): Detection probability at the activity center.
+        sigma (float): Scale parameter of the detection function.
+        K (int): Number of sampling periods.
+        density (float): Density of animals
+        prob_cap (2D array): Shape (num_traps, num_activity_centers)
+        trap_x (1D array): 1D array of activated trap locations.
+    """
+    alpha1 = (1/(2*sigma*sigma))                        # convert sigma to alpha1
+    prob_cap = ((g0)*np.exp(-alpha1*(distances**2)))    # calculate probabilty of capture
+    density_array = np.array(density).flatten()         # make density a 1D array
+    for t in range(len(trap_locs)):                     # for trap locations that are not selected, set all capture probs to 0
         if int(trap_x[t]) == 0:
             prob_cap[t,...] = np.zeros(ac_locs.shape[0])
-    broadcast_density = np.broadcast_to(density_array, (len(trap_locs), len(density_array)))
-    expected_c = np.sum(prob_cap*broadcast_density)*K
+    broadcast_density = np.broadcast_to(density_array, (len(trap_locs), len(density_array)))     # broadcast density to match prob_cap shape
+    expected_c = np.sum(prob_cap*broadcast_density)*K   # expected captures equation based on Efford/Boulanger heuristic
     return expected_c
 
 def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
+    """
+    Computes expected number of captures across multiple scenarios based on the fast heuristic from Efford/Boulanger.
+    """
     nscenarios = len(g0)
     e_c = np.zeros((nscenarios,1))
     for s in range(nscenarios):
@@ -109,69 +132,67 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tru
 
         density_prior_file = f'full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
         density_df = pd.read_csv(density_prior_file)
-        density_df['D_mod'] = density_df['D_mod'] * 25
+        density_df['D_mod'] = density_df['D_mod'] * 25      # scale up
         density_prior.append(density_df['D_mod'].values.tolist())
 
-    RSE_hist = []
-    add_hist = []
-    activated_trap_hist = []
-    rse_tracker = {}
-    n_tracker = {}
+    RSE_hist = []       # Track RSE history at each trap addition
+    add_hist = []       # Track which traps were added at each step
+    activated_trap_hist = []    # Track which traps are active at each step
+    rse_tracker = {}    # Track RSE estimates at each step
+    n_tracker = {}      # Track N estimates at each step
 
     counter = 0
     pbar = tqdm(total=max_traps, desc="Forward Greedy Progress")
-    while sum(trap_x) < max_traps:
+    while sum(trap_x) < max_traps:      # max_traps is your budget
         pbar.update(1)
         counter += 1
 
-        trap_indices = [i for i, x in enumerate(trap_x) if int(x) == 0]  # inactive traps
-        activated_trap_hist.append([i for i, x in enumerate(trap_x) if int(x) == 1])
+        trap_indices = [i for i, x in enumerate(trap_x) if int(x) == 0]                 # inactive traps
+        activated_trap_hist.append([i for i, x in enumerate(trap_x) if int(x) == 1])    # active traps
 
-        trap_x_temp = np.copy(np.broadcast_to(trap_x, (len(trap_indices), trap_x.shape[0])))
+        trap_x_temp = np.copy(np.broadcast_to(trap_x, (len(trap_indices), trap_x.shape[0])))    # temp array to try adding each inactive trap
         for pos in range(len(trap_indices)):
             trap_idx = trap_indices[pos]
             trap_x_temp[pos, trap_idx] = 1  # try adding this trap
 
-        func1 = partial(compute_expected_n_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)
-        func2 = partial(compute_expected_c_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)
-        pool = mp.Pool(min(mp.cpu_count(), 10))
-        E_n_per_scenario = np.squeeze(np.array(pool.map(func1, trap_x_temp)))
+        func1 = partial(compute_expected_n_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)     # parallelize expected N computation
+        func2 = partial(compute_expected_c_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)     # parallelize expected C computation
+        pool = mp.Pool(min(mp.cpu_count(), 10))         # I limited to 10 cores since my machine was getting overworked, but this could be adjusted.
+        E_n_per_scenario = np.squeeze(np.array(pool.map(func1, trap_x_temp)))   
         E_c_per_scenario = np.squeeze(np.array(pool.map(func2, trap_x_temp)))
         pool.close()
         pool.join()
 
-        E_r_per_scenario = E_c_per_scenario
-        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape)
-        RSE_per_scenario = np.zeros(E_r_per_scenario.shape)
+        E_r_per_scenario = E_c_per_scenario     # Compute E_r based on E_c
+        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape)     # Initialize min(N,R) array
+        RSE_per_scenario = np.zeros(E_r_per_scenario.shape)         # Initialize RSE array
 
-        for t in range(len(trap_indices)):
+        for t in range(len(trap_indices)):  
             for s in range(len(scenarios)):
-                E_r_per_scenario[t, s] -= E_n_per_scenario[t, s]
-                # print if E_r or E_n is smaller for each scenario
-                if E_r_per_scenario[t, s] < E_n_per_scenario[t, s]:
-                    print(f"Scenario {s} (Draw {scenarios[s][3]}): E_r < E_n ({E_r_per_scenario[t, s]:.2f} < {E_n_per_scenario[t, s]:.2f}) when adding trap {trap_indices[t]}")
-                else:
-                    print(f"Scenario {s} (Draw {scenarios[s][3]}): E_n <= E_r ({E_n_per_scenario[t, s]:.2f} <= {E_r_per_scenario[t, s]:.2f}) when adding trap {trap_indices[t]}")
-                min_n_r_per_scenario[t, s] = min(E_n_per_scenario[t, s], E_r_per_scenario[t, s])
+                E_r_per_scenario[t, s] -= E_n_per_scenario[t, s]    # E_r = E_c - E_n, We set E_r to equal E_c above for ease of computation.
+                # if E_r_per_scenario[t, s] < E_n_per_scenario[t, s]:
+                #     print(f"Scenario {s} (Draw {scenarios[s][3]}): E_r < E_n ({E_r_per_scenario[t, s]:.2f} < {E_n_per_scenario[t, s]:.2f}) when adding trap {trap_indices[t]}")
+                # else:
+                #     print(f"Scenario {s} (Draw {scenarios[s][3]}): E_n <= E_r ({E_n_per_scenario[t, s]:.2f} <= {E_r_per_scenario[t, s]:.2f}) when adding trap {trap_indices[t]}")
+                min_n_r_per_scenario[t, s] = min(E_n_per_scenario[t, s], E_r_per_scenario[t, s]) 
                 RSE_per_scenario[t, s] = 1 / np.sqrt(min_n_r_per_scenario[t, s])
 
-        RSE_temp = np.mean(RSE_per_scenario, axis=1).tolist()
+        RSE_temp = np.mean(RSE_per_scenario, axis=1).tolist()   # Mean RSE across scenarios for each candidate trap addition
         variances = np.var(RSE_per_scenario, axis=1)
         average_variance = variances.mean()
         # print(f"Iteration {counter} RSE candidates: {RSE_temp}")
-        print(f"Iteration {counter} average variance: {average_variance}")
+        # print(f"Iteration {counter} average variance: {average_variance}")
 
         rse_tracker[counter] = {
             cam_id: RSE_temp[i]
             for i, cam_id in enumerate(trap_indices)
         }
 
-        # pick the trap whose *addition* gives minimum mean RSE
-        min_change_idx = RSE_temp.index(min(RSE_temp))
+        min_change_idx = RSE_temp.index(min(RSE_temp))      # pick the trap to add to the layout that has the lowest RSE
         add = trap_indices[min_change_idx]
         trap_x[add] = 1
 
-        # Track N estimates
+        # Track N estimates)
         n_tracker[counter] = {}
         for i, param_draw in enumerate(draw):
             true_N = draw_to_trueN[param_draw]
@@ -199,41 +220,44 @@ draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 # Read in parameter draws
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/param_values_for_each_draw300_marten.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-# Filter for these 10 params
-params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]
+
+# Set IDs of parameters to evaluate over
+params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]       ### I hardcoded this, not sure how we want to do this for the webapp?
 
 D = params['D'].values
 g0 = params['g0'].values
 sigma = params['sigma'].values
 K = 5
 draw = params['index'].values.tolist()
-print(f"Parameter draws evaluated over: {draw}")
+print(f"Parameter draws evaluated over: {draw}")        # sanity check print statement
 
-ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
+ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')       # read in potential AC locations
 ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values.tolist()
 ac_coords_list = np.array(ac_coords_list)
 
 trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
 trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
-# exclude_trap_coords = pd.read_csv('./500m_data/traps_to_remove_50m.csv')
-exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')
-trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]
-trap_coords_list = []
+
+# Remove trap locations which will never have a deployment -- Not sure if this will be functionality supported in webapp? Right now, not using it so commenting out.
+# exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')
+# trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]
+
+trap_coords_list = []       # Create list of candidate trap locations
 for i in range(trap_coords.shape[0]):
     trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
 trap_coords_list = np.array(trap_coords_list)
-print(f"{trap_coords_list.shape} candidate trap locations")
-trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
+print(f"{trap_coords_list.shape} candidate trap locations")     # sanity check on number of candidate trap locations
+trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])    # convert to dataframe
 
 traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
 centers = ac_coords_list[np.newaxis, :, :]  # Add a new axis to centers to make it 3D
 differences = traps - centers
-distances = np.linalg.norm(differences, axis=2)
+distances = np.linalg.norm(differences, axis=2)  # compute the EUCLIDEAN distances between all traps and all activity centers
 
 scenarios = list(zip(*[D, g0, sigma, draw]))
 
-start_date = datetime.now()
+start_date = datetime.now()     # track runtimes (maybe not needed for the webapp)
 start_time = time.time()
 
 ################################################################################################################################
@@ -251,7 +275,7 @@ selected_traps, RSE_hist, trap_x = forward_greedy(scenarios, trap_coords_list, a
 end_date = datetime.now()
 end_time = time.time()
 
-# export the total runtime to a text file
+# export the total runtime to a text file - Can skip for webapp.
 with open('secr/Sample Average Approximation/SA2/SA2-20/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -263,27 +287,29 @@ with open('secr/Sample Average Approximation/SA2/SA2-20/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results from greedy algorithms
-np.save('./secr/Sample Average Approximation/SA2/SA2-20/all_selected_traps.npy', selected_traps)
+np.save('./secr/Sample Average Approximation/SA2/SA2-20/all_selected_traps.npy', selected_traps)        ### THIS IS THE IMPORTANT FILE OUTPUT TO VISUALIE THE SELECTED TRAPS.
 # Save the expected number of detections history as a txt file
 # with open('./secr/Greedy Removal/FGR2/en_hist.txt', 'w') as f:
 #     for en in en_hist:
 #         f.write(f"{en}\n")
 # same RSE history as txt file
+
+# All other files are probably not needing to be exported on webapp? Consider commenting out below. This was for my own tracking.
 with open('./secr/Sample Average Approximation/SA2/SA2-20/rse_hist.txt', 'w') as f:
     for rse in RSE_hist:
         f.write(f"{rse}\n")
-# Save the trap_x configuration
 with open('./secr/Sample Average Approximation/SA2/SA2-20/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
-# Print the selected traps
 print("Selected traps:", selected_traps)
-# Print the expected number of detections history
-# print("Expected number of detections history:", en_hist)
 
 
 ###############################################################################################################################
 ###########                                      GENERATE FILES FOR SECR                                            ############
 ################################################################################################################################
+"""
+This section is probably not needed as we aren't using SECR in the webapp loop anywhere. 
+Can probably disregard this as its just setting up file formatting to work with Arielle's SECR code.
+"""
 
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
 trap_coords_list_df.to_csv(f'./secr/Sample Average Approximation/SA2/SA2-20/considered_trap_locs.csv', index=False)
