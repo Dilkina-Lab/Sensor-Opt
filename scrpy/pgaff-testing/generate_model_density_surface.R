@@ -35,7 +35,8 @@ mask_covs <- covariates(mask)
 # === ONLY USE FIRST TWO BETA FILES (NO IP METHODS) ===
 beta_files <- list(
     "Genetic" = "SAA3-SA19-70traps_test_RSE.csv",
-    "Greedy"  = "SA2-20-70traps_test_RSE_CELLDENSITIES.csv"
+    "Greedy"  = "SA2-20-70traps_test_RSE_CELLDENSITIES.csv",
+    "Uniform" = "U_70traps_test.csv"
 )
 
 # Process each method

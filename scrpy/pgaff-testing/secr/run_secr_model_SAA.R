@@ -36,8 +36,8 @@ traps_500m <- traps_500m[-c(1)]
 # Remove the first unnamed index column if present (based on your earlier code)
 if ("X" %in% colnames(traps_500m)) traps_500m <- traps_500m[-1]
 
-# exclude_traps <- read.table("SensorOpt/secr/Genetic/unselected_traps_B80_draw10_row250_excluded.txt", col.names = "Trap_index")
-exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SAA8/Budget = 60/IP-excluded_ids-budget60-SA14.txt", col.names = "Trap_index")
+exclude_traps <- read.table("SensorOpt/secr/Uniform/U_70A_excluded_traps-70.txt", col.names = "Trap_index")
+# exclude_traps <- read.table("SensorOpt/secr/Sample Average Approximation/SAA8/Budget = 10/IP-excluded_ids-budget10-SA14.txt", col.names = "Trap_index")
 
 # Filter out excluded traps
 optim_cams <- traps_500m %>% 
@@ -213,7 +213,7 @@ for (draw in draw_ids) {
 })
 }
 
-file_name <- paste0("IP5-60traps_SA14_test_RSE.csv")
+file_name <- paste0("U_70traps_test.csv")
 
 write.csv(results, file = file_name, row.names = FALSE)
 
