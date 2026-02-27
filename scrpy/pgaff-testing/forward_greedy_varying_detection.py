@@ -24,26 +24,32 @@ logging.getLogger("distributed").setLevel(logging.ERROR)
 
 def compute_expected_n(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
     """
-    Computes expected number of unique individuals detected in a spatial capture-recapture study BASED ON THE FAST HEURISTIC from Efford/Boulanger.
-        ac_locs (2D array): Shape (num_activity_centers, 2) - x and y coordinates of activity centers.
-        trap_locs (2D array): Shape (num_traps, 2) - x and y coordinates of all potential trap locations.
-        g0 (float): Detection probability at the activity center.
-        sigma (float): Scale parameter of the detection function.
-        K (int): Number of sampling periods.
-        density (float): Density of animals
-        prob_cap (2D array): Shape (num_traps, num_activity_centers) - capture probability at each trap j of individuals with activity center l.
-        trap_x (1D array): 1D array of activated trap locations.
+    g0, sigma, density: 1D arrays length = num_activity_centers (one value per pixel).
+    distances: shape (num_traps, num_activity_centers).
     """
-    alpha1 = (1/(2*sigma*sigma))
-    prob_cap = ((g0)*np.exp(-alpha1*(distances**2)))        # Array of size (# traps, # poential activity centers)
-    for t in range(len(trap_locs)):                         # for trap locations that are not selected, set all capture probs to 0
+    # alpha1_j = 1 / (2 * sigma_j^2)
+    alpha1 = 1.0 / (2.0 * sigma * sigma)                     # (n_pixels,)
+    alpha1 = np.broadcast_to(alpha1, distances.shape)        # (n_traps, n_pixels)
+
+    g0_b = np.broadcast_to(g0, distances.shape)              # (n_traps, n_pixels)
+
+    prob_cap = g0_b * np.exp(-alpha1 * (distances ** 2))     # (n_traps, n_pixels)
+
+    # zero out inactive traps
+    for t in range(len(trap_locs)):
         if int(trap_x[t]) == 0:
-            prob_cap[t,...] = np.zeros(ac_locs.shape[0])
-    i_cap_hist = np.squeeze(np.zeros((len(trap_locs), 1)))  # Initialize empty capture history 
-    p_empty_cap_hist = compute_cond_lik_ind(len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist)  # compute probability of never being captured (call below function)
-    p_nonempty = 1 - p_empty_cap_hist               # probabily of being captured at least once
-    expected_n = np.sum(p_nonempty*density)         # En equation based on Efford/Boulanger heuristic
+            prob_cap[t, :] = 0.0
+
+    i_cap_hist = np.zeros(len(trap_locs))                    # one entry per trap
+    p_empty_cap_hist = compute_cond_lik_ind(
+        len(ac_locs), prob_cap, K, len(trap_locs), i_cap_hist
+    )
+    p_nonempty = 1.0 - p_empty_cap_hist
+
+    density_array = np.array(density).flatten()              # (n_pixels,)
+    expected_n = np.sum(p_nonempty * density_array)
     return expected_n
+
 
 def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
     """
@@ -62,47 +68,48 @@ def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_c
     log_cond_lik_sums = np.sum(log_probs, axis=0)
     return np.exp(log_cond_lik_sums)
 
-def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
-    """
-    Computes expected number of unique individuals detected across multiple scenarios based on the fast heuristic from Efford/Boulanger.
-    """
-    nscenarios = len(g0)
-    e_n = np.zeros((nscenarios,1))
+
+def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list, K, density_list, distances, trap_x):
+    nscenarios = len(g0_list)
+    e_n = np.zeros((nscenarios, 1))
     for s in range(nscenarios):
-        e_n[s,0] = compute_expected_n(ac_locs, trap_locs, g0[s], sigma[s], K, density[s], distances, trap_x)
-    return(e_n)
+        e_n[s, 0] = compute_expected_n(
+            ac_locs, trap_locs,
+            g0_list[s], sigma_list[s], K, density_list[s], distances, trap_x
+        )
+    return e_n
+
 
 def compute_expected_c(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
     """
-    Computes expected number of captures in a spatial capture-recapture study BASED ON THE FAST HEURISTIC from Efford/Boulanger.
-        ac_locs (2D array): Shape (num_activity_centers, 2)
-        trap_locs (2D array): Shape (num_traps, 2)
-        g0 (float): Detection probability at the activity center.
-        sigma (float): Scale parameter of the detection function.
-        K (int): Number of sampling periods.
-        density (float): Density of animals
-        prob_cap (2D array): Shape (num_traps, num_activity_centers)
-        trap_x (1D array): 1D array of activated trap locations.
+    g0, sigma, density: 1D arrays length = num_activity_centers.
     """
-    alpha1 = (1/(2*sigma*sigma))                        # convert sigma to alpha1
-    prob_cap = ((g0)*np.exp(-alpha1*(distances**2)))    # calculate probabilty of capture
-    density_array = np.array(density).flatten()         # make density a 1D array
-    for t in range(len(trap_locs)):                     # for trap locations that are not selected, set all capture probs to 0
+    alpha1 = 1.0 / (2.0 * sigma * sigma)
+    alpha1 = np.broadcast_to(alpha1, distances.shape)        # (n_traps, n_pixels)
+    g0_b = np.broadcast_to(g0, distances.shape)              # (n_traps, n_pixels)
+
+    prob_cap = g0_b * np.exp(-alpha1 * (distances ** 2))
+
+    for t in range(len(trap_locs)):
         if int(trap_x[t]) == 0:
-            prob_cap[t,...] = np.zeros(ac_locs.shape[0])
-    broadcast_density = np.broadcast_to(density_array, (len(trap_locs), len(density_array)))     # broadcast density to match prob_cap shape
-    expected_c = np.sum(prob_cap*broadcast_density)*K   # expected captures equation based on Efford/Boulanger heuristic
+            prob_cap[t, :] = 0.0
+
+    density_array = np.array(density).flatten()
+    broadcast_density = np.broadcast_to(density_array, prob_cap.shape)
+
+    expected_c = np.sum(prob_cap * broadcast_density) * K
     return expected_c
 
-def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, density, distances, trap_x):
-    """
-    Computes expected number of captures across multiple scenarios based on the fast heuristic from Efford/Boulanger.
-    """
-    nscenarios = len(g0)
-    e_c = np.zeros((nscenarios,1))
+
+def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list, K, density_list, distances, trap_x):
+    nscenarios = len(g0_list)
+    e_c = np.zeros((nscenarios, 1))
     for s in range(nscenarios):
-        e_c[s,0] = compute_expected_c(ac_locs, trap_locs, g0[s], sigma[s], K, density[s], distances, trap_x)
-    return(e_c)
+        e_c[s, 0] = compute_expected_c(
+            ac_locs, trap_locs,
+            g0_list[s], sigma_list[s], K, density_list[s], distances, trap_x
+        )
+    return e_c
 
 #################################################################################################################################
 ############                                         GREEDY FUNCTIONS                                                ############
@@ -110,22 +117,32 @@ def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0, sigma, K, densit
 
 def forward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_trueN, max_traps):
     print("Starting Forward Greedy Algorithm for RSE Minimization")
-    trap_x = np.zeros((len(trap_loc),))  # start with zero traps
+    trap_x = np.zeros((len(trap_loc),))
     D = []
-    g0 = []
-    sigma = []
     density_prior = []
+    g0_prior = []
+    sigma_prior = []
 
-    # Precompute density prior information for all scenarios
     for s in range(len(scenarios)):
         D.append(scenarios[s][0])
-        g0.append(scenarios[s][1])
-        sigma.append(scenarios[s][2])
 
-        density_prior_file = f'full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{scenarios[s][3]}.csv'
+        draw_id = scenarios[s][3]
+
+        # Density surface
+        density_prior_file = f'full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/Dmod_draw_{draw_id}.csv'
         density_df = pd.read_csv(density_prior_file)
-        density_df['D_mod'] = density_df['D_mod'] * 25      # scale up
-        density_prior.append(density_df['D_mod'].values.tolist())
+        density_df["D_mod"] = density_df["D_mod"] * 25  # scaling as before
+        density_prior.append(density_df["D_mod"].values)  # shape (n_pixels,)
+
+        # g0 surface
+        g0_prior_file = f'full_grid_1km/10-3 data (Marten)/Constant_detection/g0_mod/g0mod_draw_{draw_id}.csv'
+        g0_df = pd.read_csv(g0_prior_file)
+        g0_prior.append(g0_df["g0_mod"].values)          # shape (n_pixels,)
+
+        # sigma surface
+        sigma_prior_file = f'full_grid_1km/10-3 data (Marten)/Constant_detection/sigma_mod/sigmamod_draw_{draw_id}.csv'
+        sigma_df = pd.read_csv(sigma_prior_file)
+        sigma_prior.append(sigma_df["sigma_mod"].values) # shape (n_pixels,)
 
     RSE_hist = []       # Track RSE history at each trap addition
     add_hist = []       # Track which traps were added at each step
@@ -147,8 +164,8 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances, draw, draw_to_tru
             trap_idx = trap_indices[pos]
             trap_x_temp[pos, trap_idx] = 1  # try adding this trap
 
-        func1 = partial(compute_expected_n_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)     # parallelize expected N computation
-        func2 = partial(compute_expected_c_across_scenarios, centers, trap_loc, g0, sigma, K, density_prior, distances)     # parallelize expected C computation
+        func1 = partial(compute_expected_n_across_scenarios, centers, trap_loc, g0_prior, sigma_prior, K, density_prior, distances)
+        func2 = partial(compute_expected_c_across_scenarios, centers, trap_loc, g0_prior, sigma_prior, K, density_prior, distances)
         pool = mp.Pool(min(mp.cpu_count(), 10))         # I limited to 10 cores since my machine was getting overworked, but this could be adjusted.
         E_n_per_scenario = np.squeeze(np.array(pool.map(func1, trap_x_temp)))   
         E_c_per_scenario = np.squeeze(np.array(pool.map(func2, trap_x_temp)))
