@@ -26,10 +26,10 @@ def compute_expected_n_indiv(ac_x, ac_y, g0, sigma, K, trap_locs, trap_x):
     Computes expected number of unique individuals detected in a spatial capture-recapture study
     using simulated activity centers with individual-level g0 and sigma.
 
-        ac_x, ac_y (1D arrays): Length (N_indiv) - x and y coordinates of simulated activity centers.
-        g0 (1D array): Length (N_indiv) - detection probability at the activity center for each individual.
-        sigma (1D array): Length (N_indiv) - scale parameter of the detection function for each individual.
-        K (int): Number of sampling periods.
+        ac_x, ac_y: x and y coordinates of simulated activity centers.
+        g0: detection probability at the activity center for each individual.
+        sigma: scale parameter of the detection function for each individual.
+        K: Number of sampling periods.
         trap_locs (2D array): Shape (num_traps, 2) - x and y coordinates of all potential trap locations.
         trap_x (1D array): Length (num_traps) - 1 if trap is active, 0 otherwise.
     """
@@ -317,7 +317,7 @@ end_date = datetime.now()
 end_time = time.time()
 
 # export the total runtime to a text file - Can skip for webapp.
-with open('secr/Sample Average Approximation/SA9/SA9-1/runtime.txt', 'w') as f:
+with open('./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/runtime.txt', 'w') as f:
     # write the start time and date
     f.write(f"Start time: {start_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
     f.write(f"End time: {end_date.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -328,13 +328,13 @@ with open('secr/Sample Average Approximation/SA9/SA9-1/runtime.txt', 'w') as f:
 print(f"Total runtime: {end_time - start_time} seconds")
 
 # Save the results from greedy algorithms
-np.save('./secr/Sample Average Approximation/SA9/SA9-1/all_selected_traps.npy', selected_traps)        ### THIS IS THE IMPORTANT FILE OUTPUT TO VISUALIE THE SELECTED TRAPS.
+np.save('./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/all_selected_traps.npy', selected_traps)        ### THIS IS THE IMPORTANT FILE OUTPUT TO VISUALIE THE SELECTED TRAPS.
 
 # All other files are probably not needing to be exported on webapp? Consider commenting out below. This was for my own tracking.
-with open('./secr/Sample Average Approximation/SA9/SA9-1/rse_hist.txt', 'w') as f:
+with open('./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/rse_hist.txt', 'w') as f:
     for rse in RSE_hist:
         f.write(f"{rse}\n")
-with open('./secr/Sample Average Approximation/SA9/SA9-1/considered_trap_locs.pkl', 'wb') as f:
+with open('./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/considered_trap_locs.pkl', 'wb') as f:
     pickle.dump(trap_x, f)
 print("Selected traps:", selected_traps)
 
@@ -343,13 +343,10 @@ print("Selected traps:", selected_traps)
 ###########                                      GENERATE FILES FOR SECR                                            ############
 ################################################################################################################################
 trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])
-trap_coords_list_df.to_csv(f'./secr/Sample Average Approximation/SA9/SA9-1/considered_trap_locs.csv', index=False)
-
+trap_coords_list_df.to_csv(f'./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/considered_trap_locs.csv', index=False)
 
 # Generate Files for SECR Analysis
-base_dir = './secr/Sample Average Approximation/SA9/SA9-1'
-# trap_coords_list = pd.read_csv(f'./secr/Sample Average Approximation/SA9/SA9-1/considered_trap_locs.csv')
-
+base_dir = './secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1'
 
 # All trap coordinates (full grid)
 trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
