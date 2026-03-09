@@ -260,8 +260,7 @@ draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/param_values_for_each_draw300_marten_g0sigma_covs.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
-# params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]
-params = params[params['index'].isin([34])]
+params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]
 
 D = params['D'].values
 g0_scalar = params['g0'].values   # kept for reference but not used in heuristic now
