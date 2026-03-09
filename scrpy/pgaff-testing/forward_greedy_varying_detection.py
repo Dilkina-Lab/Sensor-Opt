@@ -50,13 +50,6 @@ def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distan
     p_nonempty = 1.0 - p_empty_cap_hist
     expected_n = np.sum(p_nonempty * density)
 
-    if np.any(np.isnan(prob_cap)):
-        print("NaN in prob_cap")
-    if np.any(np.isnan(p_nonempty)):
-        print("NaN in p_nonempty")
-    if np.any(np.isnan(density)):
-        print("NaN in density passed to compute_expected_n")
-
     return expected_n
 
 
