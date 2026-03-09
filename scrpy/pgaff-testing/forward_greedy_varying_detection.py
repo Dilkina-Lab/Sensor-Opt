@@ -14,9 +14,11 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings("ignore")
 
+
 #################################################################################################################################
 ############                                        UTILITY FUNCTIONS                                                ############
 #################################################################################################################################
+
 
 def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distances, trap_x):
     """
@@ -33,7 +35,7 @@ def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distan
     """
     # convert per-AC sigma to per-(trap,AC) alpha1 via broadcasting
     sigma_sq = sigma_vec[np.newaxis, :] ** 2              # (1, n_AC)
-    alpha1 = 1.0 / (2.0 * sigma_sq)                      # (1, n_AC)
+    alpha1 = 1.0 / (2.0 * sigma_sq)                       # (1, n_AC)
     prob_cap = g0_vec[np.newaxis, :] * np.exp(-alpha1 * (distances ** 2))
 
     # zero out inactive traps
@@ -47,6 +49,14 @@ def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distan
     )
     p_nonempty = 1.0 - p_empty_cap_hist
     expected_n = np.sum(p_nonempty * density)
+
+    if np.any(np.isnan(prob_cap)):
+        print("NaN in prob_cap")
+    if np.any(np.isnan(p_nonempty)):
+        print("NaN in p_nonempty")
+    if np.any(np.isnan(density)):
+        print("NaN in density passed to compute_expected_n")
+
     return expected_n
 
 
@@ -104,28 +114,28 @@ def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
                                        K, density_list[s], distances, trap_x)
     return e_c
 
+
 #################################################################################################################################
 ############                                         GREEDY FUNCTIONS                                                ############
 #################################################################################################################################
 
+
 def forward_greedy(scenarios, trap_loc, centers, K, distances,
                    draw, draw_to_trueN, max_traps,
                    mask_det_dir):
-    """
-    scenarios: list of (D_scalar, g0_scalar, sigma_scalar, draw_id)
-              g0_scalar/sigma_scalar are still there but we now override them
-              with per-AC values from Mask_det_covs files.
-    mask_det_dir: directory containing Mask_det_covs_draw_#.csv
-    """
+
     print("Starting Forward Greedy Algorithm for RSE Minimization")
     trap_x = np.zeros((len(trap_loc),))
     g0_list = []
     sigma_list = []
     density_prior = []   # density per AC per scenario
 
-    # base density on D_mod, as before (mask-level density)
-    for s in range(len(scenarios)):
-        draw_id = scenarios[s][3]
+    prec = 6  # rounding precision for coordinate alignment
+
+    # 1) Build per-scenario density and detection parameters on the mask
+    for s, scen in enumerate(scenarios):
+        draw_id = scen[3]
+        print(f"Building scenario {s}, draw {draw_id}")
 
         # density on mask
         density_prior_file = (
@@ -134,17 +144,40 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances,
         )
         density_df = pd.read_csv(density_prior_file)
         density_df['D_mod'] = density_df['D_mod'] * 25
-        # assume rows match mask order
-        density_prior.append(density_df['D_mod'].values)
+        density_df['x_round'] = density_df['x'].round(prec)
+        density_df['y_round'] = density_df['y'].round(prec)
 
         # per-mask detection covariates
         det_cov_file = os.path.join(mask_det_dir,
                                     f'Mask_det_covs_draw_{draw_id}.csv')
         det_df = pd.read_csv(det_cov_file)
-        # ensure same ordering as mask by sorting/merging on x,y
-        det_merged = centers_df.merge(det_df, on=['x', 'y'], how='left')
-        g0_list.append(det_merged['g0'].values)
-        sigma_list.append(det_merged['sigma'].values)
+        det_df['x_round'] = det_df['x'].round(prec)
+        det_df['y_round'] = det_df['y'].round(prec)
+
+        # merge to align with mask (centers_df must be global)
+        merged = centers_df.merge(density_df[['x_round', 'y_round', 'D_mod']],
+                                  on=['x_round', 'y_round'], how='left') \
+                           .merge(det_df[['x_round', 'y_round', 'g0', 'sigma']],
+                                  on=['x_round', 'y_round'], how='left')
+
+        if merged['D_mod'].isna().any() or merged['g0'].isna().any() or merged['sigma'].isna().any():
+            nD = merged['D_mod'].isna().sum()
+            ng0 = merged['g0'].isna().sum()
+            nsig = merged['sigma'].isna().sum()
+            raise ValueError(f"NaNs after rounded merge for draw {draw_id}: "
+                             f"D_mod NaNs={nD}, g0 NaNs={ng0}, sigma NaNs={nsig}")
+
+        d_vec = merged['D_mod'].values
+        g0_vec = merged['g0'].values
+        sigma_vec = merged['sigma'].values
+
+        density_prior.append(d_vec)
+        g0_list.append(g0_vec)
+        sigma_list.append(sigma_vec)
+
+        print("  sum D:", np.sum(d_vec),
+              "g0 range:", g0_vec.min(), g0_vec.max(),
+              "sigma range:", sigma_vec.min(), sigma_vec.max())
 
     RSE_hist = []
     add_hist = []
@@ -171,23 +204,32 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances,
                         K, density_prior, distances)
 
         pool = mp.Pool(min(mp.cpu_count(), 10))
-        E_n_per_scenario = np.squeeze(np.array(pool.map(func1, trap_x_temp)))
-        E_c_per_scenario = np.squeeze(np.array(pool.map(func2, trap_x_temp)))
+        E_n_per_scenario = np.array(pool.map(func1, trap_x_temp))
+        E_c_per_scenario = np.array(pool.map(func2, trap_x_temp))
         pool.close()
         pool.join()
 
+        # shapes: (n_candidates, n_scenarios, 1) -> (n_candidates, n_scenarios)
+        E_n_per_scenario = E_n_per_scenario[:, :, 0]
+        E_c_per_scenario = E_c_per_scenario[:, :, 0]
+
         E_r_per_scenario = E_c_per_scenario.copy()
-        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape)
-        RSE_per_scenario = np.zeros(E_r_per_scenario.shape)
+        min_n_r_per_scenario = np.zeros_like(E_r_per_scenario)
+        RSE_per_scenario = np.zeros_like(E_r_per_scenario)
 
         for t in range(len(trap_indices)):
             for s in range(len(scenarios)):
                 E_r_per_scenario[t, s] -= E_n_per_scenario[t, s]
-                min_n_r_per_scenario[t, s] = min(E_n_per_scenario[t, s],
-                                                 E_r_per_scenario[t, s])
-                RSE_per_scenario[t, s] = 1.0 / np.sqrt(min_n_r_per_scenario[t, s])
+                val = min(E_n_per_scenario[t, s], E_r_per_scenario[t, s])
+                if val <= 0 or np.isnan(val):
+                    min_n_r_per_scenario[t, s] = np.nan
+                    RSE_per_scenario[t, s] = np.nan
+                else:
+                    min_n_r_per_scenario[t, s] = val
+                    RSE_per_scenario[t, s] = 1.0 / np.sqrt(val)
 
-        RSE_temp = np.mean(RSE_per_scenario, axis=1).tolist()
+        # ignore NaNs when averaging across scenarios
+        RSE_temp = np.nanmean(RSE_per_scenario, axis=1).tolist()
 
         rse_tracker[counter] = {
             cam_id: RSE_temp[i]
@@ -214,9 +256,11 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances,
     print(f"Final selected traps: {selected_traps}")
     return add_hist, RSE_hist, trap_x
 
+
 #################################################################################################################################
 ############                                        READ IN PARAMETERS                                               ############
 #################################################################################################################################
+
 
 true_n = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/True_N_per_draw.csv')
 draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
@@ -225,7 +269,6 @@ params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_param
 params = params.rename(columns={'Unnamed: 0': 'index'})
 # params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]
 params = params[params['index'].isin([34])]
-
 
 D = params['D'].values
 g0_scalar = params['g0'].values   # kept for reference but not used in heuristic now
@@ -240,6 +283,9 @@ ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values
 centers = ac_coords_list
 centers_df = pd.DataFrame(centers, columns=['x', 'y'])
+prec = 6
+centers_df['x_round'] = centers_df['x'].round(prec)
+centers_df['y_round'] = centers_df['y'].round(prec)
 
 # traps
 trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
@@ -261,6 +307,7 @@ start_time = time.time()
 ###########                                         RUN GREEDY FUNCTIONS                                            ############
 ################################################################################################################################
 
+
 mask_det_dir = './full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/mask_det_covs_mod'
 selected_traps, RSE_hist, trap_x = forward_greedy(
     scenarios, trap_coords_list, centers, K, distances,
@@ -273,7 +320,6 @@ selected_traps, RSE_hist, trap_x = forward_greedy(
 
 end_date = datetime.now()
 end_time = time.time()
-
 
 # export the total runtime to a text file - Can skip for webapp.
 with open('./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/runtime.txt', 'w') as f:
