@@ -8,209 +8,196 @@ from functools import partial
 import pickle
 import multiprocessing as mp
 from scipy import stats
-import sys
 from tqdm import tqdm
 import time
 from datetime import datetime
 import warnings
 warnings.filterwarnings("ignore")
-import logging
-logging.getLogger("distributed").setLevel(logging.ERROR)
 
 #################################################################################################################################
 ############                                        UTILITY FUNCTIONS                                                ############
 #################################################################################################################################
 
-def compute_expected_n_indiv(ac_x, ac_y, g0, sigma, K, trap_locs, trap_x):
+def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distances, trap_x):
     """
-    Computes expected number of unique individuals detected in a spatial capture-recapture study
-    using simulated activity centers with individual-level g0 and sigma.
-
-        ac_x, ac_y: x and y coordinates of simulated activity centers.
-        g0: detection probability at the activity center for each individual.
-        sigma: scale parameter of the detection function for each individual.
-        K: Number of sampling periods.
-        trap_locs (2D array): Shape (num_traps, 2) - x and y coordinates of all potential trap locations.
-        trap_x (1D array): Length (num_traps) - 1 if trap is active, 0 otherwise.
+    Expected number of unique individuals detected using Efford/Boulanger approx
+    with g0 and sigma allowed to vary by mask cell/AC location
+        ac_locs: x and y coordinates of potential activity center locations based on mask
+        trap_locs: x and y coordinates of potential trap locations
+        g0_vec: varying g0 values for each potnetial AC location
+        sigma_vec: varying sigma values for each potential AC location
+        K: number of sampling time periods
+        density: varying density at each pixel in the study area
+        distances: stored distances between each potential trap location and each potential AC location
+        trap_x: binary 0/1 value if trap is placed at that location or not (length = number of potential trap locations)
     """
-    # Identify active traps
-    active_idx = np.where(trap_x.astype(int) == 1)[0]
-    if active_idx.size == 0:
-        return 0.0
+    # convert per-AC sigma to per-(trap,AC) alpha1 via broadcasting
+    sigma_sq = sigma_vec[np.newaxis, :] ** 2              # (1, n_AC)
+    alpha1 = 1.0 / (2.0 * sigma_sq)                      # (1, n_AC)
+    prob_cap = g0_vec[np.newaxis, :] * np.exp(-alpha1 * (distances ** 2))
 
-    active_traps = trap_locs[active_idx, :]  # (n_active_traps, 2)
+    # zero out inactive traps
+    inactive = (trap_x == 0)
+    prob_cap[inactive, :] = 0.0
 
-    # Compute squared distances from active traps to each individual AC: shape (n_active_traps, N_indiv)
-    diff_x = active_traps[:, 0][:, np.newaxis] - ac_x[np.newaxis, :]
-    diff_y = active_traps[:, 1][:, np.newaxis] - ac_y[np.newaxis, :]
-    d2 = diff_x**2 + diff_y**2
-
-    # Broadcast per-individual sigma and g0 across traps
-    sigma_b = np.broadcast_to(sigma[np.newaxis, :], d2.shape)
-    g0_b = np.broadcast_to(g0[np.newaxis, :], d2.shape)
-
-    # Per-trap, per-individual detection probability
-    prob_cap = g0_b * np.exp(-d2 / (2.0 * sigma_b * sigma_b))  # (n_active_traps, N_indiv)
-
-    # Probability of no detection over K occasions at each active trap: (1 - p)^K
-    p_no_det_per_trap = (1.0 - prob_cap) ** K
-
-    # Probability of no detection at any trap for each individual: product over traps
-    p_no_det_i = np.prod(p_no_det_per_trap, axis=0)  # length N_indiv
-
-    # Probability of being detected at least once
-    p_det_i = 1.0 - p_no_det_i
-
-    # Expected number of unique individuals detected
-    expected_n = np.sum(p_det_i)
+    # probability of never being captured across all traps and K occasions
+    i_cap_hist = np.squeeze(np.zeros((len(trap_locs), 1)))
+    p_empty_cap_hist = compute_cond_lik_ind(
+        ac_locs.shape[0], prob_cap, K, len(trap_locs), i_cap_hist
+    )
+    p_nonempty = 1.0 - p_empty_cap_hist
+    expected_n = np.sum(p_nonempty * density)
     return expected_n
 
 
-def compute_expected_c_indiv(ac_x, ac_y, g0, sigma, K, trap_locs, trap_x):
+def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
+    broadcast_i_cap_hist = np.broadcast_to(ind_cap_hist[:, np.newaxis],
+                                           (num_traps, num_activity_centers))
+    probs = stats.binom.pmf(broadcast_i_cap_hist, K, est_prob_cap)
+    zero_mask = probs == 0.0
+    log_probs = np.log(probs, where=~zero_mask)
+    log_probs[zero_mask] = -sys.maxsize - 1
+    log_cond_lik_sums = np.sum(log_probs, axis=0)
+    return np.exp(log_cond_lik_sums)
+
+
+def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
+                                        K, density_list, distances, trap_x):
     """
-    Computes expected number of captures in a spatial capture-recapture study
-    using simulated activity centers with individual-level g0 and sigma.
-
-        ac_x, ac_y (1D arrays): Length (N_indiv).
-        g0 (1D array): Length (N_indiv).
-        sigma (1D array): Length (N_indiv).
-        K (int): Number of sampling periods.
-        trap_locs (2D array): Shape (num_traps, 2).
-        trap_x (1D array): Length (num_traps).
-    """
-    # Identify active traps
-    active_idx = np.where(trap_x.astype(int) == 1)[0]
-    if active_idx.size == 0:
-        return 0.0
-
-    active_traps = trap_locs[active_idx, :]  # (n_active_traps, 2)
-
-    # Compute squared distances from active traps to each individual AC: shape (n_active_traps, N_indiv)
-    diff_x = active_traps[:, 0][:, np.newaxis] - ac_x[np.newaxis, :]
-    diff_y = active_traps[:, 1][:, np.newaxis] - ac_y[np.newaxis, :]
-    d2 = diff_x**2 + diff_y**2
-
-    # Broadcast per-individual sigma and g0 across traps
-    sigma_b = np.broadcast_to(sigma[np.newaxis, :], d2.shape)
-    g0_b = np.broadcast_to(g0[np.newaxis, :], d2.shape)
-
-    # Per-trap, per-individual detection probability
-    prob_cap = g0_b * np.exp(-d2 / (2.0 * sigma_b * sigma_b))  # (n_active_traps, N_indiv)
-
-    # Expected captures = K * sum_t sum_i p_ti
-    expected_c = K * np.sum(prob_cap)
-    return expected_c
-
-
-def compute_expected_n_across_scenarios_indiv(ac_list, trap_locs, g0_list, sigma_list, K, trap_x):
-    """
-    Computes expected number of unique individuals detected across multiple scenarios
-    using simulated activity centers.
+    Expected n across scenarios, allowing g0/sigma to vary by AC and scenario.
+        g0_list, sigma_list, density_list: lists of length n_scenarios,
+        each element is a vector over ACs.
     """
     nscenarios = len(g0_list)
     e_n = np.zeros((nscenarios, 1))
     for s in range(nscenarios):
-        ac_x, ac_y = ac_list[s]
-        e_n[s, 0] = compute_expected_n_indiv(
-            ac_x, ac_y, g0_list[s], sigma_list[s], K, trap_locs, trap_x
-        )
+        e_n[s, 0] = compute_expected_n(ac_locs, trap_locs,
+                                       g0_list[s], sigma_list[s],
+                                       K, density_list[s], distances, trap_x)
     return e_n
 
 
-def compute_expected_c_across_scenarios_indiv(ac_list, trap_locs, g0_list, sigma_list, K, trap_x):
+def compute_expected_c(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distances, trap_x):
     """
-    Computes expected number of captures across multiple scenarios
-    using simulated activity centers.
+    Expected total captures with g0/sigma varying by AC.
     """
+    sigma_sq = sigma_vec[np.newaxis, :] ** 2
+    alpha1 = 1.0 / (2.0 * sigma_sq)
+    prob_cap = g0_vec[np.newaxis, :] * np.exp(-alpha1 * (distances ** 2))
+
+    inactive = (trap_x == 0)
+    prob_cap[inactive, :] = 0.0
+
+    density_array = np.array(density).flatten()
+    broadcast_density = np.broadcast_to(density_array, (len(trap_locs), len(density_array)))
+    expected_c = np.sum(prob_cap * broadcast_density) * K
+    return expected_c
+
+
+def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
+                                        K, density_list, distances, trap_x):
     nscenarios = len(g0_list)
     e_c = np.zeros((nscenarios, 1))
     for s in range(nscenarios):
-        ac_x, ac_y = ac_list[s]
-        e_c[s, 0] = compute_expected_c_indiv(
-            ac_x, ac_y, g0_list[s], sigma_list[s], K, trap_locs, trap_x
-        )
+        e_c[s, 0] = compute_expected_c(ac_locs, trap_locs,
+                                       g0_list[s], sigma_list[s],
+                                       K, density_list[s], distances, trap_x)
     return e_c
-
 
 #################################################################################################################################
 ############                                         GREEDY FUNCTIONS                                                ############
 #################################################################################################################################
 
-def forward_greedy(scenarios, trap_loc, K, ac_list, g0_indiv_list, sigma_indiv_list, draw, draw_to_trueN, max_traps):
+def forward_greedy(scenarios, trap_loc, centers, K, distances,
+                   draw, draw_to_trueN, max_traps,
+                   mask_det_dir):
+    """
+    scenarios: list of (D_scalar, g0_scalar, sigma_scalar, draw_id)
+              g0_scalar/sigma_scalar are still there but we now override them
+              with per-AC values from Mask_det_covs files.
+    mask_det_dir: directory containing Mask_det_covs_draw_#.csv
+    """
     print("Starting Forward Greedy Algorithm for RSE Minimization")
     trap_x = np.zeros((len(trap_loc),))
-    D = []  # still available if you need it later
+    g0_list = []
+    sigma_list = []
+    density_prior = []   # density per AC per scenario
 
-    # Store D per scenario (not used in computations below but kept for consistency)
+    # base density on D_mod, as before (mask-level density)
     for s in range(len(scenarios)):
-        D.append(scenarios[s][0])
+        draw_id = scenarios[s][3]
 
-    RSE_hist = []       # Track RSE history at each trap addition
-    add_hist = []       # Track which traps were added at each step
-    activated_trap_hist = []    # Track which traps are active at each step
-    rse_tracker = {}    # Track RSE estimates at each step
-    n_tracker = {}      # Track N estimates at each step
+        # density on mask
+        density_prior_file = (
+            f'full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/'
+            f'Dmod_draw_{draw_id}.csv'
+        )
+        density_df = pd.read_csv(density_prior_file)
+        density_df['D_mod'] = density_df['D_mod'] * 25
+        # assume rows match mask order
+        density_prior.append(density_df['D_mod'].values)
+
+        # per-mask detection covariates
+        det_cov_file = os.path.join(mask_det_dir,
+                                    f'Mask_det_covs_draw_{draw_id}.csv')
+        det_df = pd.read_csv(det_cov_file)
+        # ensure same ordering as mask by sorting/merging on x,y
+        det_merged = centers_df.merge(det_df, on=['x', 'y'], how='left')
+        g0_list.append(det_merged['g0'].values)
+        sigma_list.append(det_merged['sigma'].values)
+
+    RSE_hist = []
+    add_hist = []
+    rse_tracker = {}
+    n_tracker = {}
 
     counter = 0
     pbar = tqdm(total=max_traps, desc="Forward Greedy Progress")
-    while sum(trap_x) < max_traps:      # max_traps is your budget
+    while sum(trap_x) < max_traps:
         pbar.update(1)
         counter += 1
 
-        trap_indices = [i for i, x in enumerate(trap_x) if int(x) == 0]                 # inactive traps
-        activated_trap_hist.append([i for i, x in enumerate(trap_x) if int(x) == 1])    # active traps
-
-        trap_x_temp = np.copy(np.broadcast_to(trap_x, (len(trap_indices), trap_x.shape[0])))    # temp array to try adding each inactive trap
+        trap_indices = [i for i, x in enumerate(trap_x) if int(x) == 0]
+        trap_x_temp = np.copy(np.broadcast_to(trap_x, (len(trap_indices), trap_x.shape[0])))
         for pos in range(len(trap_indices)):
             trap_idx = trap_indices[pos]
-            trap_x_temp[pos, trap_idx] = 1  # try adding this trap
+            trap_x_temp[pos, trap_idx] = 1
 
-        # partials for individual-level expectations
-        func1 = partial(
-            compute_expected_n_across_scenarios_indiv,
-            ac_list, trap_loc, g0_indiv_list, sigma_indiv_list, K
-        )
-        func2 = partial(
-            compute_expected_c_across_scenarios_indiv,
-            ac_list, trap_loc, g0_indiv_list, sigma_indiv_list, K
-        )
+        func1 = partial(compute_expected_n_across_scenarios,
+                        centers, trap_loc, g0_list, sigma_list,
+                        K, density_prior, distances)
+        func2 = partial(compute_expected_c_across_scenarios,
+                        centers, trap_loc, g0_list, sigma_list,
+                        K, density_prior, distances)
 
-        pool = mp.Pool(min(mp.cpu_count(), 10))         # I limited to 10 cores since my machine was getting overworked, but this could be adjusted.
+        pool = mp.Pool(min(mp.cpu_count(), 10))
         E_n_per_scenario = np.squeeze(np.array(pool.map(func1, trap_x_temp)))
         E_c_per_scenario = np.squeeze(np.array(pool.map(func2, trap_x_temp)))
         pool.close()
         pool.join()
 
-        E_r_per_scenario = E_c_per_scenario     # Compute E_r based on E_c
-        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape)     # Initialize min(N,R) array
-        RSE_per_scenario = np.zeros(E_r_per_scenario.shape)         # Initialize RSE array
+        E_r_per_scenario = E_c_per_scenario.copy()
+        min_n_r_per_scenario = np.zeros(E_r_per_scenario.shape)
+        RSE_per_scenario = np.zeros(E_r_per_scenario.shape)
 
         for t in range(len(trap_indices)):
             for s in range(len(scenarios)):
-                E_r_per_scenario[t, s] -= E_n_per_scenario[t, s]    # E_r = E_c - E_n, We set E_r to equal E_c above for ease of computation.
-                # if E_r_per_scenario[t, s] < E_n_per_scenario[t, s]:
-                #     print(f"Scenario {s} (Draw {scenarios[s][3]}): E_r < E_n ({E_r_per_scenario[t, s]:.2f} < {E_n_per_scenario[t, s]:.2f}) when adding trap {trap_indices[t]}")
-                # else:
-                #     print(f"Scenario {s} (Draw {scenarios[s][3]}): E_n <= E_r ({E_n_per_scenario[t, s]:.2f} <= {E_r_per_scenario[t, s]:.2f}) when adding trap {trap_indices[t]}")
-                min_n_r_per_scenario[t, s] = min(E_n_per_scenario[t, s], E_r_per_scenario[t, s])
-                RSE_per_scenario[t, s] = 1 / np.sqrt(min_n_r_per_scenario[t, s])
+                E_r_per_scenario[t, s] -= E_n_per_scenario[t, s]
+                min_n_r_per_scenario[t, s] = min(E_n_per_scenario[t, s],
+                                                 E_r_per_scenario[t, s])
+                RSE_per_scenario[t, s] = 1.0 / np.sqrt(min_n_r_per_scenario[t, s])
 
-        RSE_temp = np.mean(RSE_per_scenario, axis=1).tolist()   # Mean RSE across scenarios for each candidate trap addition
-        variances = np.var(RSE_per_scenario, axis=1)
-        average_variance = variances.mean()
-        # print(f"Iteration {counter} RSE candidates: {RSE_temp}")
-        # print(f"Iteration {counter} average variance: {average_variance}")
+        RSE_temp = np.mean(RSE_per_scenario, axis=1).tolist()
 
         rse_tracker[counter] = {
             cam_id: RSE_temp[i]
             for i, cam_id in enumerate(trap_indices)
         }
 
-        min_change_idx = RSE_temp.index(min(RSE_temp))      # pick the trap to add to the layout that has the lowest RSE
+        min_change_idx = RSE_temp.index(min(RSE_temp))
         add = trap_indices[min_change_idx]
         trap_x[add] = 1
 
-        # Track N estimates)
         n_tracker[counter] = {}
         for i, param_draw in enumerate(draw):
             true_N = draw_to_trueN[param_draw]
@@ -227,94 +214,66 @@ def forward_greedy(scenarios, trap_loc, K, ac_list, g0_indiv_list, sigma_indiv_l
     print(f"Final selected traps: {selected_traps}")
     return add_hist, RSE_hist, trap_x
 
-
 #################################################################################################################################
 ############                                        READ IN PARAMETERS                                               ############
 #################################################################################################################################
-# Read in True N file
+
 true_n = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/True_N_per_draw.csv')
 draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 
-# Read in parameter draws
 params = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/param_values_for_each_draw300_marten_g0sigma_covs.csv')
 params = params.rename(columns={'Unnamed: 0': 'index'})
+# params = params[params['index'].isin([34, 68, 80, 93, 105, 155, 197, 219, 282, 298])]
+params = params[params['index'].isin([34])]
 
-# Set IDs of parameters to evaluate over
-params = params[params['index'].isin([64, 74, 76, 78, 109, 125, 164, 204, 238, 250])]
 
 D = params['D'].values
-g0 = params['g0'].values
-sigma = params['sigma'].values
+g0_scalar = params['g0'].values   # kept for reference but not used in heuristic now
+sigma_scalar = params['sigma'].values
 K = 5
 draw = params['index'].values.tolist()
-print(f"Parameter draws evaluated over: {draw}")        # sanity check print statement
+print(f"Parameter draws evaluated over: {draw}")
 
-# ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')       # read in potential AC locations
-# ac_coords = ac_coords[None]
-# ac_coords_list = ac_coords[['x', 'y']].values.tolist()
-# ac_coords_list = np.array(ac_coords_list)
+# mask (potential AC locations)
+ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
+ac_coords = ac_coords[None]
+ac_coords_list = ac_coords[['x', 'y']].values
+centers = ac_coords_list
+centers_df = pd.DataFrame(centers, columns=['x', 'y'])
 
+# traps
 trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
-trap_coords = trap_coords.drop(columns = ['Unnamed: 0'])
+trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
+trap_coords_list = trap_coords[['x', 'y']].values
 
-# Remove trap locations which will never have a deployment -- Not sure if this will be functionality supported in webapp? Right now, not using it so commenting out.
-# exclude_trap_coords = pd.read_csv('./full_grid_1km/traps_to_remove_1km.csv')
-# trap_coords = trap_coords[~trap_coords['Trap_index'].isin(exclude_trap_coords['Trap_index'])]
+# distances trap x mask
+traps_3d = trap_coords_list[:, np.newaxis, :]
+centers_3d = centers[np.newaxis, :, :]
+differences = traps_3d - centers_3d
+distances = np.linalg.norm(differences, axis=2)
 
-trap_coords_list = []       # Create list of candidate trap locations
-for i in range(trap_coords.shape[0]):
-    trap_coords_list.append((trap_coords['x'].iloc[i], trap_coords['y'].iloc[i]))
-trap_coords_list = np.array(trap_coords_list)
-print(f"{trap_coords_list.shape} candidate trap locations")     # sanity check on number of candidate trap locations
-trap_coords_list_df = pd.DataFrame(trap_coords_list, columns=['x', 'y'])    # convert to dataframe
+scenarios = list(zip(*[D, g0_scalar, sigma_scalar, draw]))
 
-# traps = trap_coords_list[:, np.newaxis, :]  # Add a new axis to traps to make it 3D
-# centers = ac_coords_list[np.newaxis, :, :]  # Add a new axis to centers to make it 3D
-# differences = traps - centers
-# distances = np.linalg.norm(differences, axis=2)  # compute the EUCLIDEAN distances between all traps and all activity centers
-
-scenarios = list(zip(*[D, g0, sigma, draw]))
-
-# Build per-scenario lists of simulated activity centers and their g0, sigma
-ac_list = []          # each element: (ac_x, ac_y)
-g0_indiv_list = []    # each: 1D array of g0_i
-sigma_indiv_list = [] # each: 1D array of sigma_i
-
-for s in range(len(scenarios)):
-    draw_id = scenarios[s][3]   # this is the index for Parameter_draw
-
-    ac_file = f'./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/AC_locations/AC_draw_{draw_id}.csv'
-    ac_df = pd.read_csv(ac_file)
-
-    ac_x = ac_df["x"].values
-    ac_y = ac_df["y"].values
-    g0_i = ac_df["g0"].values
-    sigma_i = ac_df["sigma"].values
-
-    ac_list.append((ac_x, ac_y))
-    g0_indiv_list.append(g0_i)
-    sigma_indiv_list.append(sigma_i)
-
-start_date = datetime.now()     # track runtimes (maybe not needed for the webapp)
+start_date = datetime.now()
 start_time = time.time()
 
 ################################################################################################################################
 ###########                                         RUN GREEDY FUNCTIONS                                            ############
 ################################################################################################################################
 
-# Run the forward greedy algorithm
+mask_det_dir = './full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/mask_det_covs_mod'
 selected_traps, RSE_hist, trap_x = forward_greedy(
-    scenarios, trap_coords_list, K,
-    ac_list, g0_indiv_list, sigma_indiv_list,
-    draw, draw_to_trueN, 80
+    scenarios, trap_coords_list, centers, K, distances,
+    draw, draw_to_trueN, 80, mask_det_dir
 )
 
 ################################################################################################################################
 ###########                                           PROCESS RESULTS                                               ############
 ################################################################################################################################
-# log the ending time of Forward Greedy
+
 end_date = datetime.now()
 end_time = time.time()
+
 
 # export the total runtime to a text file - Can skip for webapp.
 with open('./secr/Forward Greedy/SA9 (Marten, varying detection)/SA9-1/runtime.txt', 'w') as f:
