@@ -21,7 +21,6 @@ warnings.filterwarnings("ignore")
 #################################################################################################################################
 
 
-
 def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distances, trap_x):
     """
     Expected number of unique individuals detected using Efford/Boulanger approx
@@ -55,7 +54,6 @@ def compute_expected_n(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distan
     return expected_n
 
 
-
 def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_cap_hist):
     broadcast_i_cap_hist = np.broadcast_to(ind_cap_hist[:, np.newaxis],
                                            (num_traps, num_activity_centers))
@@ -65,7 +63,6 @@ def compute_cond_lik_ind(num_activity_centers, est_prob_cap, K, num_traps, ind_c
     log_probs[zero_mask] = -sys.maxsize - 1
     log_cond_lik_sums = np.sum(log_probs, axis=0)
     return np.exp(log_cond_lik_sums)
-
 
 
 def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
@@ -82,7 +79,6 @@ def compute_expected_n_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
                                        g0_list[s], sigma_list[s],
                                        K, density_list[s], distances, trap_x)
     return e_n
-
 
 
 def compute_expected_c(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distances, trap_x):
@@ -102,7 +98,6 @@ def compute_expected_c(ac_locs, trap_locs, g0_vec, sigma_vec, K, density, distan
     return expected_c
 
 
-
 def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
                                         K, density_list, distances, trap_x):
     nscenarios = len(g0_list)
@@ -119,11 +114,7 @@ def compute_expected_c_across_scenarios(ac_locs, trap_locs, g0_list, sigma_list,
 ############                                         GREEDY FUNCTIONS                                                ############
 #################################################################################################################################
 
-
-
-def forward_greedy(scenarios, trap_loc, centers, K, distances,
-                   draw, draw_to_trueN, max_traps,
-                   mask_det_dir):
+def forward_greedy(scenarios, trap_loc, centers, K, distances,draw, draw_to_trueN, max_traps,mask_det_dir):
 
     print("Starting Forward Greedy Algorithm for RSE Minimization")
     trap_x = np.zeros((len(trap_loc),))
@@ -140,26 +131,37 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances,
 
         # density on mask
         density_prior_file = (
-            f'full_grid_1km/10-3 data (Marten)/Constant_detection/D_mod/'
+            f'/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/D_mod/'
             f'Dmod_draw_{draw_id}.csv'
         )
         density_df = pd.read_csv(density_prior_file)
         density_df['D_mod'] = density_df['D_mod'] * 25
         density_df['x_round'] = density_df['x'].round(prec)
         density_df['y_round'] = density_df['y'].round(prec)
+        print(density_df.head(3))
 
         # per-mask detection covariates
         det_cov_file = os.path.join(mask_det_dir,
                                     f'Mask_det_covs_draw_{draw_id}.csv')
+        #return if file exists or not
+        if not os.path.isfile(det_cov_file):
+            raise FileNotFoundError(f"Detection covariate file not found for draw {draw_id}: {det_cov_file}")
+
         det_df = pd.read_csv(det_cov_file)
         det_df['x_round'] = det_df['x'].round(prec)
         det_df['y_round'] = det_df['y'].round(prec)
+
+        print(det_df.head(3))
 
         # merge to align with mask (centers_df must be global)
         merged = centers_df.merge(density_df[['x_round', 'y_round', 'D_mod']],
                                   on=['x_round', 'y_round'], how='left') \
                            .merge(det_df[['x_round', 'y_round', 'g0', 'sigma']],
                                   on=['x_round', 'y_round'], how='left')
+
+        #put in dataframe the x y coordinates with NaN density values
+        den_nan_df = merged[merged['D_mod'].isna()][['x_round', 'y_round']]
+        den_nan_df.to_csv('density_nan_coords.csv', index=False)
 
         if merged['D_mod'].isna().any() or merged['g0'].isna().any() or merged['sigma'].isna().any():
             nD = merged['D_mod'].isna().sum()
@@ -263,41 +265,40 @@ def forward_greedy(scenarios, trap_loc, centers, K, distances,
 ############                                        READ IN PARAMETERS & SETUP                                      ############
 #################################################################################################################################
 
-
-true_n = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/True_N_per_draw.csv')
+true_n = pd.read_csv('/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/True_N_per_draw.csv')
 draw_to_trueN = dict(zip(true_n['Parameter_draw'], true_n['N']))
 
-params_full = pd.read_csv('./full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/param_values_for_each_draw300_marten_g0sigma_covs.csv')
+params_full = pd.read_csv('/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/param_values_for_each_draw300_griz_2018.csv')
 params_full = params_full.rename(columns={'Unnamed: 0': 'index'})
 
 # Store SA groups as a dict so you can choose any order or subset by key
 sa_groups_dict = {
-    # "SA1":  [64, 74, 76, 78, 109, 125, 164, 204, 238, 250],
-    # "SA2":  [31, 43, 68, 79, 91, 98, 212, 222, 289, 298],
-    # "SA9-3":  [112, 114, 115, 125, 158, 176, 183, 225, 283, 287],
-    # "SA9-4":  [16, 25, 38, 60, 80, 145, 225, 234, 238, 275],
-    # "SA9-5":  [38, 57, 68, 85, 94, 105, 130, 193, 197, 282],
-    # "SA9-6":  [7, 10, 34, 47, 78, 91, 165, 193, 204, 282],
-    # "SA9-7":  [57, 67, 69, 74, 112, 125, 145, 197, 230, 231],
-    # "SA9-8":  [6, 26, 31, 77, 94, 120, 164, 197, 219, 222],
-    # "SA9-9":  [8, 18, 20, 69, 115, 166, 174, 180, 194, 238],
-    # "SA9-10": [11, 83, 158, 197, 212, 216, 222, 239, 257, 287],
-    # "SA9-11": [6, 64, 69, 98, 112, 153, 166, 195, 204, 296]
-    # "SA9-12": [10, 57, 58, 60, 130, 148, 176, 187, 193, 231],
-    # "SA9-13": [18, 57, 61, 78, 105, 130, 183, 227, 233, 287],
-    # "SA9-14": [10, 23, 69, 91, 94, 102, 145, 197, 219, 222],
-    "SA9-15": [17, 58, 79, 91, 145, 227, 231, 238, 257, 289],
-    "SA9-16": [18, 34, 69, 114, 174, 176, 181, 195, 197, 282],
-    "SA9-17": [17, 57, 149, 193, 222, 230, 231, 233, 287, 298],
-    "SA9-18": [47, 77, 93, 94, 148, 187, 197, 227, 234, 296],
-    "SA9-19": [7, 77, 80, 98, 109, 204, 225, 238, 257, 287]
-    # "SA9-20": [34, 68, 80, 93, 105, 155, 197, 219, 282, 298]  # already run separately
+    "SA1":  [64, 74, 76, 78, 109, 125, 164, 204, 238, 250],
+    "SA2":  [31, 43, 68, 79, 91, 98, 212, 222, 289, 298],
+    "SA3":  [112, 114, 115, 125, 158, 176, 183, 225, 283, 287],
+    "SA4":  [16, 25, 38, 60, 80, 145, 225, 234, 238, 275],
+    "SA5":  [38, 57, 68, 85, 94, 105, 130, 193, 197, 282],
+    "SA6":  [7, 10, 34, 47, 78, 91, 165, 193, 204, 282],
+    "SA7":  [57, 67, 69, 74, 112, 125, 145, 197, 230, 231],
+    "SA8":  [6, 26, 31, 77, 94, 120, 164, 197, 219, 222],
+    "SA9":  [8, 18, 20, 69, 115, 166, 174, 180, 194, 238],
+    "SA10": [11, 83, 158, 197, 212, 216, 222, 239, 257, 287],
+    "SA11": [6, 64, 69, 98, 112, 153, 166, 195, 204, 296],
+    "SA12": [10, 57, 58, 60, 130, 148, 176, 187, 193, 231],
+    "SA13": [18, 57, 61, 78, 105, 130, 183, 227, 233, 287],
+    "SA14": [10, 23, 69, 91, 94, 102, 145, 197, 219, 222],
+    "SA15": [17, 58, 79, 91, 145, 227, 231, 238, 257, 289],
+    "SA16": [18, 34, 69, 114, 174, 176, 181, 195, 197, 282],
+    "SA17": [17, 57, 149, 193, 222, 230, 231, 233, 287, 298],
+    "SA18": [47, 77, 93, 94, 148, 187, 197, 227, 234, 296],
+    "SA19": [7, 77, 80, 98, 109, 204, 225, 238, 257, 287],
+    "SA20": [34, 68, 80, 93, 105, 155, 197, 219, 282, 298]
 }
 
 K = 5
 
 # mask (potential AC locations)
-ac_coords = pyreadr.read_r('./full_grid_1km/10-3 data (Marten)/500m_mask_marten.RDS')
+ac_coords = pyreadr.read_r('/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/500m_mask_grizzly_2018.RDS')
 ac_coords = ac_coords[None]
 ac_coords_list = ac_coords[['x', 'y']].values
 centers = ac_coords_list
@@ -305,9 +306,12 @@ centers_df = pd.DataFrame(centers, columns=['x', 'y'])
 prec = 6
 centers_df['x_round'] = centers_df['x'].round(prec)
 centers_df['y_round'] = centers_df['y'].round(prec)
+print(len(centers_df))
+print(centers_df.head(3))
 
 # traps
-trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
+# trap_coords = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
+trap_coords = pd.read_csv('/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/SCM_2018_traps.csv')
 trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
 trap_coords_list = trap_coords[['x', 'y']].values
 
@@ -317,17 +321,14 @@ centers_3d = centers[np.newaxis, :, :]
 differences = traps_3d - centers_3d
 distances = np.linalg.norm(differences, axis=2)
 
-mask_det_dir = './full_grid_1km/10-3 data (Marten)/varying_detection_params/2-26 Marten/mask_det_covs_mod'
-
+mask_det_dir = '/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/mask_det_covs_mod'
 
 
 ################################################################################################################################
 ###########                                         RUN GREEDY FOR SELECTED SA GROUPS                              ############
 ################################################################################################################################
 
-# Choose which SAs to run and in what order:
-# e.g., to run all: sa_keys_to_run = list(sa_groups_dict.keys())
-# or a subset / custom order: ["SA3", "SA1", "SA9"]
+# Choose which SAs to run
 sa_keys_to_run = list(sa_groups_dict.keys())
 
 for sa_key in sa_keys_to_run:
@@ -352,16 +353,18 @@ for sa_key in sa_keys_to_run:
     start_date = datetime.now()
     start_time = time.time()
 
+    max_traps = 60          # how many cameras should you place?
+
     selected_traps, RSE_hist, trap_x = forward_greedy(
         scenarios, trap_coords_list, centers, K, distances,
-        draw, draw_to_trueN, 80, mask_det_dir
+        draw, draw_to_trueN, max_traps, mask_det_dir
     )
 
     end_date = datetime.now()
     end_time = time.time()
 
     # Output paths for this SA group
-    base_dir = f'./secr/Forward Greedy/SA9 (Marten, varying detection)/{sa_key}'
+    base_dir = f'./secr/Forward Greedy/SA10 (Bear, subset existing grid,varying detection)/{sa_key}'
     os.makedirs(base_dir, exist_ok=True)
 
     # export the total runtime to a text file - Can skip for webapp.
@@ -393,12 +396,12 @@ for sa_key in sa_keys_to_run:
     trap_coords_list_df.to_csv(os.path.join(base_dir, 'considered_trap_locs.csv'), index=False)
 
     # All trap coordinates (full grid)
-    trap_coords_full = pd.read_csv('./full_grid_1km/10-3 data (Marten)/1000m_trap_grid_marten.csv')
+    trap_coords_full = pd.read_csv('/Users/hannahmurray/Documents/GitHub/Sensor-Opt/scrpy/pgaff-testing/Data/Bears/varying detection/subset existing grid/SCM_2018_traps.csv')
     trap_coords_full = trap_coords_full.rename(columns={'X': 'x', 'Y': 'y'})
     trap_coords_full = trap_coords_full.drop(columns=['Unnamed: 0'])
     all_trap_ids = set(trap_coords_full['Trap_index'])
 
-    for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
+    for n_cams in [5, 10, 15, 20,25, 30, 35, 40, 45, 50, 55, 60]:     # note fo hannah - modularize this so its in increments of 10 from 10 to whatever max traps is
         traps_subset = selected_traps[:n_cams]
 
         trap_coords_list_sub_df = trap_coords_full[trap_coords_full['Trap_index'].isin(traps_subset)].copy()
