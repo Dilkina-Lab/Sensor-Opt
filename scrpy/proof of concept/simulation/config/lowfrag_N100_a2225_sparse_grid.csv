@@ -1,0 +1,13 @@
+landscape_raster_file,../data/simulation/covariate_rasters/lowfrag_covariate.tif
+raster_cell_size,0.1
+N,100
+n_ac_realizations,1
+activity_centers_seed,5678
+trap_config,grid
+n_traps_x,7
+n_traps_y,7
+ALPHA0,1
+ALPHA1,3.369959
+ALPHA2,2.25
+K,10
+capture_histories_seed,5678

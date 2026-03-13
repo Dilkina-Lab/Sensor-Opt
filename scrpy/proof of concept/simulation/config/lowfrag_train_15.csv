@@ -1,0 +1,9 @@
+landscape_raster_file,../data/simulation/covariate_rasters/lowfrag_covariate.tif
+raster_cell_size,0.1
+n_ac_realizations,1
+activity_centers_seed,5678
+beta1,-3
+N,98
+alpha0,1.9963327471596852
+alpha1,3.348511973597023
+alpha2,2.28799720781725

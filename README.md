@@ -1,1 +1,1 @@
-# Sensor-Opt
+# SCR-Py: Running SCR models in Python to Enable Optimizing Camera Trap Placement for Spatial Capture-Recapture Population Estimation.
