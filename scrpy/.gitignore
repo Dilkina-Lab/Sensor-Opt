@@ -1,6 +1,5 @@
 src/__pycache__/
 .pyc
 .vscode/
-data/
 logs/
 **/.DS_Store
