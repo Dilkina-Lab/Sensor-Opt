@@ -2,4 +2,5 @@ src/__pycache__/
 .pyc
 .vscode/
 logs/
+scrpy/pgaff-testing/secr/pgaff-camera-optim.json
 **/.DS_Store
