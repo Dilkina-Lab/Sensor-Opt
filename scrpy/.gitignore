@@ -4,3 +4,6 @@ src/__pycache__/
 logs/
 scrpy/pgaff-testing/secr/pgaff-camera-optim.json
 **/.DS_Store
+pgaff-camera-optim.json
+.DS_Store
+
