@@ -244,8 +244,8 @@ ac_coords_list = ac_coords[['x', 'y']].values.tolist()
 ac_coords_list = np.array(ac_coords_list)
 
 # Read in trap coordinates
-trap_coords = pd.read_csv('./Data/Bears/constant detection/full_grid_1km/grizz_2018/1000m_trapping_grid.csv')
-trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
+trap_coords = pd.read_csv('./Data/Bears/constant detection/full_grid_1km/grizz_2018/2000m_trapping_grid.csv')
+# trap_coords = trap_coords.drop(columns=['Unnamed: 0'])
 
 # trap_coords = pd.read_csv('./Data/Bears/constant detection/full_grid_1km/grizz_2018/Traps_2018_SCM.csv')
 # trap_coords['Trap_index'] = trap_coords['Trap_index'].astype(int)
@@ -301,7 +301,7 @@ for sa_key in sa_keys_to_run:
     end_time = time.time()
 
     # Output directory for this SA group
-    base_dir = f'./secr/Forward Greedy/Bears2018_1km_2/{sa_key}'
+    base_dir = f'./secr/Forward Greedy/Bears2018_2km/{sa_key}'
     os.makedirs(base_dir, exist_ok=True)
 
     # Runtime log
@@ -336,8 +336,8 @@ for sa_key in sa_keys_to_run:
 
     # Reload full trap coords to get Trap_index for exclusion files
     # Full grid
-    trap_coords_full = pd.read_csv('./Data/Bears/constant detection/full_grid_1km/grizz_2018/1000m_trapping_grid.csv')
-    trap_coords_full = trap_coords_full.rename(columns={'Unnamed: 0': 'row_num'})
+    trap_coords_full = pd.read_csv('./Data/Bears/constant detection/full_grid_1km/grizz_2018/2000m_trapping_grid.csv')
+    # trap_coords_full = trap_coords_full.rename(columns={'Unnamed: 0': 'row_num'})
     all_trap_ids = set(trap_coords_full['Trap_index'])
     # Prior deployment grid
     # trap_coords_full = pd.read_csv('./Data/Bears/constant detection/full_grid_1km/grizz_2018/Traps_2018_SCM.csv')

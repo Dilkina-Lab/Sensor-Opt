@@ -25,12 +25,12 @@ lines(SA_rect, col = "white")
 lines(SA_proj, col = "red")
 
 ################## Load base traps ############################
-# traps_500m <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018/1000m_trapping_grid.csv")
+# traps_500m <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/1000m_trapping_grid.csv")
 # traps_500m <- traps_500m[-c(1)]
 
-traps_500m <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018/Traps_2018_SCM.csv")
+traps_500m <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/Traps_2018_SCM.csv")
 traps_500m <- traps_500m %>%
-  rename(x = X, y = Y) %>%
+  # rename(x = X, y = Y) %>%
   mutate(Trap_index = row_number())
 
 # Remove the first unnamed index column if present (based on your earlier code)
@@ -45,7 +45,7 @@ traps_500m <- traps_500m %>%
 # )
 # param_vals <- read.csv("param_values_for_each_draw300_2018.csv")
 
-param_vals <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018/param_values_for_each_draw300_2018.csv")
+param_vals <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/param_values_for_each_draw300_2018.csv")
 param_vals <- param_vals[-1]
 
 # gcs_get_object(
@@ -56,28 +56,28 @@ param_vals <- param_vals[-1]
 # )
 # true_N <- read.csv("True_N_per_draw.csv")
 
-true_N <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018/True_N_per_draw.csv")
+true_N <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/True_N_per_draw.csv")
 
 ########################## Sigma for mask ######################################
 max_sigma <- signif(max(param_vals$sigma), 1)
 
 #### VALIDATION PARAMETERS
-# draw_ids <- c(2, 3, 12, 19, 24, 49, 56, 63, 70, 71, 92, 121, 122, 123, 124, 128, 131, 135, 138, 141,
-#               156, 159, 163, 172, 173, 182, 184, 185, 188, 189, 200, 205, 206, 208, 211, 213, 221, 228, 236, 244,
-#               255, 256, 260, 261, 265, 270, 281, 284, 293, 299)
+draw_ids <- c(2, 3, 12, 19, 24, 49, 56, 63, 70, 71, 92, 121, 122, 123, 124, 128, 131, 135, 138, 141,
+              156, 159, 163, 172, 173, 182, 184, 185, 188, 189, 200, 205, 206, 208, 211, 213, 221, 228, 236, 244,
+              255, 256, 260, 261, 265, 270, 281, 284, 293, 299)
 
 # ### TEST PARAMETERS
-draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37, 39, 40, 41,
- 42, 44, 45, 48, 50, 51, 52, 53, 54, 55, 59, 62, 65, 66, 72, 75, 81, 82, 84, 86, 87, 88, 89, 90, 95,
- 96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 111, 113, 116, 117, 118, 126, 129, 132, 133, 134, 136, 137,
-  139, 140, 142, 143, 144, 146, 147, 150, 151, 152, 154, 157, 160, 161, 162, 167, 168, 169, 170, 171, 175, 177,
-   178, 179, 190, 191, 192, 196, 198, 199, 201, 202, 203, 207, 209, 210, 214, 215, 217, 218, 220, 223, 224, 226, 229,
-    237, 241, 242, 243, 245, 246, 247, 248, 249, 252, 253, 254, 258, 259, 262, 263, 264, 266, 268, 269, 271, 272, 273,
-     274, 276, 277, 278, 280, 285, 286, 288, 291, 292, 294, 295, 297, 300)
+# draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37, 39, 40, 41,
+#  42, 44, 45, 48, 50, 51, 52, 53, 54, 55, 59, 62, 65, 66, 72, 75, 81, 82, 84, 86, 87, 88, 89, 90, 95,
+#  96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 111, 113, 116, 117, 118, 126, 129, 132, 133, 134, 136, 137,
+#   139, 140, 142, 143, 144, 146, 147, 150, 151, 152, 154, 157, 160, 161, 162, 167, 168, 169, 170, 171, 175, 177,
+#    178, 179, 190, 191, 192, 196, 198, 199, 201, 202, 203, 207, 209, 210, 214, 215, 217, 218, 220, 223, 224, 226, 229,
+#     237, 241, 242, 243, 245, 246, 247, 248, 249, 252, 253, 254, 258, 259, 262, 263, 264, 266, 268, 269, 271, 272, 273,
+#      274, 276, 277, 278, 280, 285, 286, 288, 291, 292, 294, 295, 297, 300)
 
 ########################## SET SA GROUPS TO RUN HERE ##########################
-sa_groups   <- c(3)      # e.g. 1, 2, 10:11, c(10, 15)
-trap_counts <- c(60)
+sa_groups   <- c(20)      # e.g. 1, 2, 10:11, c(10, 15)
+trap_counts <- c(50,60)
 ###############################################################################
 
 for (sa in sa_groups) {
@@ -87,7 +87,7 @@ for (sa in sa_groups) {
 
     # Load excluded traps for this SA group and trap count
     # exclude_path <- paste0("SensorOpt/secr/Sample Average Approximation/Bears2018_1km_FullGrid/SA", sa, "/SA", sa, "-excluded_traps-", n_traps, ".txt")
-    exclude_path <- paste0("SensorOpt/secr/Sample Average Approximation/Bears2018_1km_SubsetGrid/SA", sa, "/SA", sa, "-excluded_traps-", n_traps, ".txt")
+    exclude_path <- paste0("SensorOpt/secr/Sample Average Approximation/Bears2018_1km_SubsetGrid_2/SA", sa, "/SA", sa, "-excluded_traps-", n_traps, ".txt")
 
 
     if (!file.exists(exclude_path)) {
@@ -146,7 +146,7 @@ for (sa in sa_groups) {
       message("Draw ", draw)
 
       # ch <- read.csv(paste0("SensorOpt/full_grid_1km/ch/ch_draw_", draw, ".csv"))
-      ch <- read.csv(paste0("SensorOpt/Bears_ConstantDetection_1km_2018/ch/ch_draw_", draw, ".csv"))
+      ch <- read.csv(paste0("SensorOpt/Bears_ConstantDetection_1km_2018_2/ch/ch_draw_", draw, ".csv"))
       # ch <- read.csv(paste0("SensorOpt/full_grid_1km/10-3 data (Marten)/Constant_detection/ch/ch_draw_", draw, ".csv"))
 
       ch2 <- ch %>% filter(trap_id %in% traps12$Trap_index) %>%
@@ -256,7 +256,7 @@ for (sa in sa_groups) {
       })
     }
 
-    file_name <- paste0("Bear2018-subsetgrid-SA", sa, "-", n_traps, "traps-test.csv")
+    file_name <- paste0("Bear2018-partialgrid_2-SA", sa, "-", n_traps, "traps-test.csv")
     write.csv(results, file = file_name, row.names = FALSE)
     message("Saved: ", file_name)
   }
