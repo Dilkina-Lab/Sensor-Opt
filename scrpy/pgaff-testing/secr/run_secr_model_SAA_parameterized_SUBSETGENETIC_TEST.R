@@ -1,5 +1,5 @@
 setwd("/project2/dilkina_438/hannahmu")
-######################## Test secr runs using GA-optimized trap sets (2019 data) #########################
+######################## Test secr runs (2018) using GA/Greedy-optimized trap sets #########################
 # Load packages & files
 list.of.packages <- c("tidyverse", "lubridate", "dplyr",
                       "secrdesign", "sf", "terra", "ggplot2", "lhs")
@@ -20,27 +20,29 @@ plot(HF)
 SA <- st_read("SensorOpt/secr/spatial_data/study_area_2021_GCS.shp")
 SA <- st_set_crs(SA, 4326)
 SA_proj <- st_transform(SA, crs = st_crs(TC))
-SA_rect <- st_as_sf(st_as_sfc(st_bbox(SA_proj))) #This gets the rectangular bounding box of the study area
 plot(TC)
-lines(SA_rect, col = "white")
 lines(SA_proj, col = "red")
 
 ################## Load base traps ############################
-# Trap grid itself stays the same physical 2018 grid (Trap_index scheme used by the GA)
 traps_500m <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/Traps_2018_SCM.csv")
 traps_500m <- traps_500m %>%
   mutate(Trap_index = row_number())
 
-########################## Load param vals and true N (2019 data) ##############
-param_vals <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2019_2/param_values_for_each_draw300_2019.csv")
+########################## Load param vals and true N ##########################
+# NOTE: this points at the 2018 data folder while your GA run used 2018 data for
+# param_vals/traps_500m - double check this is intentional before running.
+param_vals <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/param_values_for_each_draw300_2018.csv")
 param_vals <- param_vals[-1]
 
-true_N <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2019_2/True_N_per_draw.csv")
+true_N <- read.csv("SensorOpt/Bears_ConstantDetection_1km_2018_2/True_N_per_draw.csv")
 
 ########################## Sigma for mask ######################################
-max_sigma <- signif(max(param_vals$sigma), 1)
+# MASK UNCHANGED - fixed shared constant, same as all other scripts (validation,
+# test, real-obs). Do not recompute/rederive this here.
+max_sigma <- 7500       ### 2018
+# max_sigma <- 5000       ###2019
 
-#### TEST PARAMETERS ####
+#### TEST PARAMETERS (149 draws) ####
 draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37, 39, 40, 41,
  42, 44, 45, 48, 50, 51, 52, 53, 54, 55, 59, 62, 65, 66, 72, 75, 81, 82, 84, 86, 87, 88, 89, 90, 95,
  96, 97, 99, 100, 101, 103, 104, 106, 107, 108, 111, 113, 116, 117, 118, 126, 129, 132, 133, 134, 136, 137,
@@ -49,27 +51,44 @@ draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37
     237, 241, 242, 243, 245, 246, 247, 248, 249, 252, 253, 254, 258, 259, 262, 263, 264, 266, 268, 269, 271, 272, 273,
      274, 276, 277, 278, 280, 285, 286, 288, 291, 292, 294, 295, 297, 300)
 
-########################## SET SA GROUPS TO RUN HERE ##########################
+########################## SET SA GROUPS / BUDGETS TO RUN HERE ##########################
+# NOTE: Genetic Single Scenario has NO SA groups (one layout per budget only).
+# If you switch to that method below, remove the outer `for (sa in sa_groups)`
+# loop entirely and drop `sa` from file_name/exclude_path/temp filenames.
 o_fun       <- 4          # matches the objective function used in your GA run
-sa_groups   <- 1         # SA9 only
-trap_counts <- c(50)      # set to whichever budget you're testing - update if needed
-###############################################################################
+sa_groups   <- c(1:20)    # <-- update per session chunk
+trap_counts <- c(40)      # <-- update per session chunk
+###########################################################################################
 
 for (sa in sa_groups) {
   for (n_traps in trap_counts) {
 
     message("\n========== SA", sa, " | ", n_traps, " traps ==========")
 
-    # Point at the unselected-traps output from the GA run
+    ################## SELECT WHICH METHOD'S TRAP LAYOUT TO USE ##################
+
+    #### GREEDY (ACTIVE) ####
+    # exclude_path <- paste0("SensorOpt/secr/Sample Average Approximation/Bears2018_1km_SubsetGrid_2/SA", sa,
+    #                   "/SA", sa, "-excluded_traps-", n_traps, ".txt")
+
+    #### GENETIC MULTI-SCENARIO (SAA) - commented out ####
     exclude_path <- paste0("Output/Obj_fun_", o_fun, "/Budget_", n_traps,
                           "/Unselected_traps/SA", sa, "-unselected_traps_", n_traps, "traps.csv")
+
+    # ### GENETIC SINGLE SCENARIO - commented out (remember: no SA loop for this one!) ####
+    # exclude_path <- paste0("Output/Single_scenario/Obj_fun_", o_fun, "/Budget_", n_traps,
+    #                       "/Unselected_traps/unselected_traps_", n_traps, "traps.csv")
 
     if (!file.exists(exclude_path)) {
       message("Skipping SA", sa, " / ", n_traps, " traps — file not found: ", exclude_path)
       next
     }
 
-    exclude_traps <- read.csv(exclude_path)
+    #### GREEDY read (ACTIVE) - .txt file, no header ####
+    exclude_traps <- read.table(exclude_path, col.names = "Trap_index")
+
+    #### GENETIC (both Multi and Single) read - commented out - .csv file, has header ####
+    # exclude_traps <- read.csv(exclude_path)
 
     # Filter out excluded (unselected) traps
     optim_cams <- traps_500m %>% filter(!Trap_index %in% exclude_traps$Trap_index)
@@ -87,14 +106,25 @@ for (sa in sa_groups) {
     traps_df$y <- as.numeric(traps_df$y)
     names(traps_df) <- c("trapID", "x", "y")
 
-    # Build mask for this trap set
-    SA_buffered <- st_buffer(SA_rect, max_sigma * 2)
+    # Build mask for this trap set - UNCHANGED FROM VALIDATION FILE
+    SA_buffered <- st_buffer(SA_proj, max_sigma * 2)
     mask1 <- make.mask(traps = traps12, type = "polybuffer",
-                       poly = SA_rect, buffer = max_sigma * 2, spacing = 500)
+                       poly = SA_proj, buffer = max_sigma * 2, spacing = 500)       ## make sure this is consistent with all the files
     plot(mask1)
+    ### population between 2018/19 isn't changing very much, so its really just going to rexplore the full parameter set.
+    ### do full **opt/val/test 2018** (test 2019 sims) and (test 2019 empirical)
+            ### 1. for 2018 Validation: use the 2018 mask, 2018 max_sigma (RERUN WITH SA_proj IN MASK)
+            ### 4 .for 2018 Test: use the 2018 mask, 2018 max_sigma (NOT CURRENTLY BEEN RUN, USE SA_PROJ)
+                    ### to see if the chronic underestimation is also happening here. If it is, then theres some other issue?
+                    ### if there isn't an issue, then the conclusion is that optimization on 2018 does not translate to 2019, although we don't expect much change from yr to yr.
+            ### 2. for 2019 Test: use the 2019 mask, 2019 max_sigma (RERUN WITH THE SA_PROJ file)
+                    ### chronic underestimation. make sure the mask is correct. If it still underestimates, 
+            ### 3. for 2019 Empirical: 2019 mask, 2019 max_sigma
+            ### 5. for 2019 Empirical: 10000 max_sigma
+
 
     coords_mask <- vect(data.frame(x = mask1$x, y = mask1$y),
-                        geom = c("x", "y"), crs = crs(SA_rect))
+                        geom = c("x", "y"), crs = crs(SA_proj))
 
     TC_extract <- extract(TC, coords_mask)
     HF_extract <- extract(HF, coords_mask)
@@ -110,13 +140,29 @@ for (sa in sa_groups) {
     )
     summary(covariates(mask1))
 
-    results <- matrix(nrow = 0, ncol = 20)
+    results_list <- list()
+
+    ################## OUTPUT PATH PER METHOD ##################
+
+    #### GREEDY (ACTIVE) ####
+    file_name <- paste0("Output/Greedy/Budget_", n_traps,
+                        "/Test_2018/SA", sa, "-", n_traps, "traps-test2018.csv")
+
+    #### GENETIC MULTI-SCENARIO (SAA) - commented out ####
+    # file_name <- paste0("Output/Obj_fun_", o_fun, "/Budget_", n_traps,
+    #                     "/Test_2018/SA", sa, "-", n_traps, "traps-test2018.csv")
+
+    #### GENETIC SINGLE SCENARIO - commented out (no SA in filename) ####
+    # file_name <- paste0("Output/Single_scenario/Obj_fun_", o_fun, "/Budget_", n_traps,
+    #                     "/Test_2018/", n_traps, "traps-test2018.csv")
+
+    dir.create(dirname(file_name), recursive = TRUE, showWarnings = FALSE)
 
     for (draw in draw_ids) {
       gc()
       message("Draw ", draw)
 
-      ch <- read.csv(paste0("SensorOpt/Bears_ConstantDetection_1km_2019_2/ch/ch_draw_", draw, ".csv"))
+      ch <- read.csv(paste0("SensorOpt/Bears_ConstantDetection_1km_2018_2/ch/ch_draw_", draw, ".csv"))
 
       ch2 <- ch %>% filter(trap_id %in% traps12$Trap_index) %>%
         mutate(animal = individual, trap = trap_id, session = 1) %>%
@@ -127,14 +173,19 @@ for (sa in sa_groups) {
                Session = paste("Draw", draw, sep = "")) %>%
         select(Session, ID, Occasion, Detector)
 
-      write.table(dets2, file = paste0("dets2_SA", sa, ".txt"), sep = "\t", row.names = FALSE, quote = FALSE)
+      write.table(dets2, file = paste0("dets2_SA", sa, "_budget", n_traps, ".txt"), sep = "\t", row.names = FALSE, quote = FALSE)
 
       traps_df <- traps12 %>% mutate(trapID = Trap_index) %>% select(trapID, x, y)
-      write.table(traps_df, file = paste0("traps_SA", sa, ".txt"), sep = "\t", row.names = FALSE, quote = FALSE)
+      write.table(traps_df, file = paste0("traps_SA", sa, "_budget", n_traps, ".txt"), sep = "\t", row.names = FALSE, quote = FALSE)
 
-      tryCatch({
-        ch <- read.capthist(captfile = paste0("dets2_SA", sa, ".txt"),
-                            trapfile = paste0("traps_SA", sa, ".txt"),
+      out <- tryCatch({
+
+        if (nrow(dets2) == 0) {
+          stop("No detections at any selected trap for this draw")
+        }
+
+        ch <- read.capthist(captfile = paste0("dets2_SA", sa, "_budget", n_traps, ".txt"),
+                            trapfile = paste0("traps_SA", sa, "_budget", n_traps, ".txt"),
                             detector = "proximity", skip = 1)
 
         system.time(fit_model <- secr.fit(capthist = ch, mask = mask1,
@@ -142,38 +193,39 @@ for (sa in sa_groups) {
                                           detectfn = 'HN', method = "Nelder-Mead",
                                           start = list(D = 0.0001, g0 = 0.5, sigma = 3000)))
 
-        N_mod_mat   <- region.N(fit_model)
-        sigma_vec   <- summary(fit_model)$predicted[3, ]
-        g0_vec      <- summary(fit_model)$predicted[2, ]
+        N_mod_mat <- region.N(fit_model)
+        pred      <- summary(fit_model)$predicted
+        coefs     <- summary(fit_model)$coef
 
-        out <- data.frame(
+        data.frame(
           Draw              = draw,
           N_mod             = N_mod_mat[2, 1],
           N_lower_95CI      = N_mod_mat[2, 3],
           N_upper_95CI      = N_mod_mat[2, 4],
           N_true            = true_N$N[draw],
           N_abs_error       = abs(N_mod_mat[2, 1] - true_N$N[draw]),
-          beta0             = summary(fit_model)$coef[1, 1],
-          beta1             = summary(fit_model)$coef[2, 1],
+          beta0             = coefs[1, "beta"],
+          beta1             = coefs[2, "beta"],
+          beta1_lower_95CI  = coefs[2, "lcl"],
+          beta1_upper_95CI  = coefs[2, "ucl"],
           beta1_true        = param_vals[draw, 'beta1'],
-          beta1_abs_error   = abs(summary(fit_model)$coef[2, 1] - param_vals[draw, 'beta1']),
-          sigma_mod         = sigma_vec[2],
-          sigma_lower_95CI  = sigma_vec[3],
-          sigma_upper_95CI  = sigma_vec[4],
+          beta1_abs_error   = abs(coefs[2, "beta"] - param_vals[draw, 'beta1']),
+          sigma_mod         = pred["sigma", "estimate"],
+          sigma_lower_95CI  = pred["sigma", "lcl"],
+          sigma_upper_95CI  = pred["sigma", "ucl"],
           sigma_true        = param_vals[draw, 'sigma'],
-          sigma_abs_error   = abs(sigma_vec[2] - param_vals[draw, 'sigma']),
-          g0_mod            = g0_vec[2],
-          g0_lower_95CI     = g0_vec[3],
-          g0_upper_95CI     = g0_vec[4],
+          sigma_abs_error   = abs(pred["sigma", "estimate"] - param_vals[draw, 'sigma']),
+          g0_mod            = pred["g0", "estimate"],
+          g0_lower_95CI     = pred["g0", "lcl"],
+          g0_upper_95CI     = pred["g0", "ucl"],
           g0_true           = param_vals[draw, 'g0'],
-          g0_abs_error      = abs(g0_vec[2] - param_vals[draw, 'g0'])
+          g0_abs_error      = abs(pred["g0", "estimate"] - param_vals[draw, 'g0'])
         )
-        results <<- rbind(results, out)
 
       }, error = function(e) {
         message(":x: Error on draw ", draw, ": ", e$message)
 
-        out <- data.frame(
+        data.frame(
           Draw              = draw,
           N_mod             = NA,
           N_lower_95CI      = NA,
@@ -182,6 +234,8 @@ for (sa in sa_groups) {
           N_abs_error       = NA,
           beta0             = NA,
           beta1             = NA,
+          beta1_lower_95CI  = NA,
+          beta1_upper_95CI  = NA,
           beta1_true        = param_vals[draw, 'beta1'],
           beta1_abs_error   = NA,
           sigma_mod         = NA,
@@ -195,14 +249,16 @@ for (sa in sa_groups) {
           g0_true           = param_vals[draw, 'g0'],
           g0_abs_error      = NA
         )
-        results <<- rbind(results, out)
       })
+
+      results_list[[as.character(draw)]] <- out
+
+      # Save incrementally after every draw so a crash on any later draw
+      # doesn't lose progress already made
+      results <- bind_rows(results_list)
+      write.csv(results, file = file_name, row.names = FALSE)
     }
 
-    file_name <- paste0("Output/Obj_fun_", o_fun, "/Budget_", n_traps,
-                        "/Test_2019/SA", sa, "-", n_traps, "traps-test2019.csv")
-    dir.create(dirname(file_name), recursive = TRUE, showWarnings = FALSE)
-    write.csv(results, file = file_name, row.names = FALSE)
     message("Saved: ", file_name)
   }
 }
