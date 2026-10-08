@@ -404,7 +404,8 @@ for sa_key in sa_keys_to_run:
     for n_cams in [5, 10, 15, 20,25, 30, 35, 40, 45, 50, 55, 60]:     # note fo hannah - modularize this so its in increments of 10 from 10 to whatever max traps is
         traps_subset = selected_traps[:n_cams]
 
-        trap_coords_list_sub_df = trap_coords_full[trap_coords_full['Trap_index'].isin(traps_subset)].copy()
+        trap_coords_list_sub_df = trap_coords_full.iloc[np.array(traps_subset)].copy()
+        assert len(trap_coords_list_sub_df) == n_cams
         trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df['Trap_index']  # Keep IDs as-is
 
         trap_csv_path = os.path.join(base_dir, f'selected_traps_{n_cams}.csv')
