@@ -316,7 +316,7 @@ os.makedirs(base_dir, exist_ok=True)
 for n_cams in [10, 20, 30, 40, 50, 60, 70, 80]:
     traps_subset = selected_traps[:n_cams]
 
-    trap_coords_list_sub_df = trap_coords[trap_coords['Trap_index'].isin(traps_subset)].copy()
+    trap_coords_list_sub_df = trap_coords_full.iloc[np.array(traps_subset)].copy()
     trap_coords_list_sub_df['Trap_index'] = trap_coords_list_sub_df['Trap_index']  # Keep IDs as-is
 
     trap_csv_path = f'{base_dir}/selected_traps_{n_cams}.csv'
