@@ -56,7 +56,7 @@ draw_ids <- c(1, 4, 5, 9, 13, 14, 15, 21, 22, 27, 28, 29, 30, 32, 33, 35, 36, 37
 # If you switch to that method below, remove the outer `for (sa in sa_groups)`
 # loop entirely and drop `sa` from file_name/exclude_path/temp filenames.
 o_fun       <- 4          # matches the objective function used in your GA run
-sa_groups   <- c(1:20)    # <-- update per session chunk
+sa_groups   <- c()    # <-- update per session chunk
 trap_counts <- c(40)      # <-- update per session chunk
 ###########################################################################################
 
